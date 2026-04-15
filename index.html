@@ -17,10 +17,8 @@
 </head>
 <body class="bg-sky-50">
   
-  <!-- 앱이 실행될 공간 -->
   <div id="root"></div>
 
-  <!-- React 앱 코드 시작 -->
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
@@ -44,54 +42,54 @@
       const [isEvaluating, setIsEvaluating] = useState(false); 
       const inputRef = useRef(null);
 
-      // ⭐️ 중요: 깃허브에 올리실 때 반드시 아래 따옴표 사이에 선생님의 API 키를 넣어주세요! ⭐️
-      // 예시: const apiKey = "AIzaSyD9D0k5dKJZaqB35Kul7Y8VvMnj8RzRDtk";
+      // ⭐️ 선생님, 여기에 구글 AI Studio에서 발급받은 진짜 API 키를 넣어주세요! ⭐️
+      // 예시: const apiKey = "AIzaSyD...어쩌구저쩌구...";
       const apiKey = "AIzaSyBvpyUgOQAesVMPiQoUTXobH1PI_jTIa00"; 
 
-      // 🚀 통신 에러 방지용: 캔버스와 깃허브를 모두 지원하는 스마트 호출 함수
+      // 통신 재시도 함수 (안정성 강화)
       const fetchWithFallback = async (payload) => {
-        const delays = [1000, 2000, 4000, 8000, 16000];
+        if (!apiKey) {
+            throw new Error("API_KEY_EMPTY");
+        }
         
-        for (let i = 0; i < 5; i++) {
-          try {
-            // 1차 시도 (캔버스 테스트용)
-            let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            let response = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            
-            // API 키 에러(400, 403)인 경우 즉시 중단
-            if (response.status === 400 || response.status === 403) {
-              throw new Error("API_KEY_ERROR");
-            }
-            
-            // 404 에러(깃허브 등 외부 환경) 발생 시 2차 시도 (일반 범용 모델)
-            if (response.status === 404) {
-              url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-              response = await fetch(url, {
+        // 🚀 수정됨: 404 에러 방지를 위해 여러 범용 모델을 순차적으로 시도합니다.
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-1.0-pro"];
+        
+        for (const model of modelsToTry) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            try {
+              const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
               });
+              
+              if (response.ok) {
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+              }
+              
+              // 키가 잘못되었거나 권한이 없는 경우
+              if (response.status === 400 || response.status === 403) {
+                throw new Error("API_KEY_ERROR");
+              }
+              
+              // 404 (모델을 찾을 수 없음)인 경우 다음 모델로 넘어감
+              if (response.status === 404) {
+                continue; 
+              }
+              
+              throw new Error(`API Error: ${response.status}`);
+            } catch (error) {
+              if (error.message === "API_KEY_ERROR" || error.message === "API_KEY_EMPTY") throw error;
             }
-
-            if (!response.ok) throw new Error(`API 오류 (${response.status})`);
-            const data = await response.json();
-            return data.candidates[0].content.parts[0].text;
-          } catch (error) {
-            console.error("API 에러:", error);
-            if (error.message === "API_KEY_ERROR") throw error;
-            if (i === 4) throw error;
-            await new Promise(r => setTimeout(r, delays[i]));
-          }
         }
+        throw new Error("모든 AI 모델 호출에 실패했습니다.");
       };
 
-      // 1. 음식 영양소 분류 함수 (AI)
+      // 1. 음식 영양소 분류 함수
       const analyzeFoodCategory = async (foodName) => {
-        const systemInstruction = `당신은 초등학교 실과 영양사 선생님입니다. 사용자가 입력한 음식을 '식품 구성 자전거'의 6가지 식품군 중 하나로 분류하고 이모지를 골라주세요. 반드시 JSON 형식으로 응답하세요: {"category": "분류ID", "emoji": "이모지"}. 
+        const systemInstruction = `당신은 초등학교 실과 영양사 선생님입니다. 사용자가 입력한 음식을 '식품 구성 자전거'의 6가지 식품군 중 하나로 분류하고 이모지를 골라주세요. 반드시 JSON 형식으로만 응답하세요: {"category": "분류ID", "emoji": "이모지"}. 
         분류 ID: grain(곡류), veg(채소류), protein(단백질류), fruit(과일류), dairy(유제품류), sugar(유지당류)`;
 
         const payload = {
@@ -105,7 +103,7 @@
         return JSON.parse(cleanText);
       };
 
-      // 2. 식단 한줄평 평가 함수 (AI)
+      // 2. 식단 한줄평 평가 함수
       const evaluateDiet = async () => {
         if (tray.length === 0) return;
         setIsEvaluating(true);
@@ -123,8 +121,8 @@
           const text = await fetchWithFallback(payload);
           setEvaluation(text);
         } catch (error) {
-          if (error.message === "API_KEY_ERROR") {
-            setEvaluation("앗! API 키가 잘못 입력되었습니다. 깃허브 코드의 apiKey 부분을 다시 확인해주세요! 😭");
+          if (error.message === "API_KEY_ERROR" || error.message === "API_KEY_EMPTY") {
+            setEvaluation("앗! 선생님, API 키가 입력되지 않았거나 잘못되었습니다. 메모장 코드를 다시 확인해주세요! 😭");
           } else {
             setEvaluation("앗! 선생님이 잠시 자리를 비우셨어요. 잠시 후 다시 시도해주세요! 😅");
           }
@@ -133,7 +131,7 @@
         }
       };
 
-      // 식판에 음식 추가 처리
+      // 식판에 음식 추가
       const handleAddFood = async (e) => {
         e.preventDefault();
         const foodName = inputValue.trim();
@@ -151,8 +149,8 @@
           setInputValue("");
           inputRef.current?.focus();
         } catch (err) {
-          if (err.message === "API_KEY_ERROR") {
-            setErrorMsg("API 키가 잘못되었습니다. 깃허브 코드에 API 키를 정확히 넣었는지 확인해주세요!");
+          if (err.message === "API_KEY_ERROR" || err.message === "API_KEY_EMPTY") {
+            setErrorMsg("API 키가 없습니다! 메모장 파일의 apiKey 부분에 구글 API 키를 넣어주세요.");
           } else {
             setErrorMsg("음식을 분석하는 중 오류가 발생했어요. 다시 시도해주세요!");
           }
@@ -168,7 +166,7 @@
 
       useEffect(() => { setEvaluation(""); }, [tray]);
 
-      // 개수 및 규칙 계산
+      // 규칙 검사
       const counts = {
         grain: tray.filter(f => f.category === 'grain').length,
         veg: tray.filter(f => f.category === 'veg').length,
@@ -194,7 +192,7 @@
         <div className="min-h-screen p-4 md:p-8 font-sans text-gray-800 flex flex-col items-center">
           <div className="w-full max-w-6xl space-y-6">
             
-            {/* 타이틀 영역 */}
+            {/* 타이틀 */}
             <header className="text-center space-y-3 bg-white p-6 rounded-3xl shadow-sm border border-sky-100">
               <h1 className="text-3xl md:text-4xl font-extrabold text-sky-600 flex items-center justify-center gap-2">
                 <span>✨</span> AI와 함께 짜는 균형 잡힌 식단
@@ -220,7 +218,7 @@
                       disabled={isLoading}
                     />
                     <button type="submit" disabled={isLoading || !inputValue.trim()} className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl transition-all shadow-sm">
-                      {isLoading ? "⏳ 분석 중..." : "식판에 담기"}
+                      {isLoading ? "⏳ AI 분석 중..." : "식판에 담기"}
                     </button>
                   </form>
 
