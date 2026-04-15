@@ -42,39 +42,47 @@
       const [isEvaluating, setIsEvaluating] = useState(false); 
       const inputRef = useRef(null);
 
-      // ⭐️ 선생님, 여기에 발급받으신 진짜 API 키를 넣어주세요! ⭐️
-      const apiKey = "AIzaSyAfr9cfFFLlveX3Qxthvc12j7LGe95QzHM"; 
+      // ⭐️ 선생님, 여기에 새로 발급받으신 진짜 API 키를 넣어주세요! ⭐️
+      const apiKey = "AIzaSyBpghtm6HgU88maqQHu7i-cyjcn3UtY86A"; 
 
-      // 🚀 가장 안정적인 범용 AI 모델(gemini-1.5-flash) 단일 호출 함수
+      // 🚀 404 에러 방지: 작동하는 모델을 찾을 때까지 여러 개를 시도하는 스마트 호출 함수
       const callGeminiAPI = async (payload) => {
-        if (!apiKey) {
-            throw new Error("API_KEY_EMPTY");
-        }
+        if (!apiKey) throw new Error("API_KEY_EMPTY");
         
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            return data.candidates[0].content.parts[0].text;
-          }
-          
-          if (response.status === 404) {
-            throw new Error("MODEL_NOT_FOUND"); // 404 에러 명시
-          } else if (response.status === 400 || response.status === 403) {
-            throw new Error("API_KEY_ERROR");
-          } else {
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"];
+        let lastError = null;
+
+        for (const modelName of modelsToTry) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              return data.candidates[0].content.parts[0].text;
+            }
+            
+            if (response.status === 400 || response.status === 403) {
+              throw new Error("API_KEY_ERROR");
+            }
+            
+            // 404인 경우 다음 모델로 시도
+            if (response.status === 404) {
+              console.warn(`${modelName} 모델을 찾을 수 없어 다음 모델을 시도합니다.`);
+              continue;
+            }
+            
             throw new Error(`API Error: ${response.status}`);
+          } catch (error) {
+            if (error.message === "API_KEY_ERROR") throw error;
+            lastError = error;
           }
-        } catch (error) {
-          throw error;
         }
+        throw lastError || new Error("모든 모델 호출 실패");
       };
 
       // 1. 음식 영양소 분류 (AI)
@@ -111,12 +119,10 @@
           const text = await callGeminiAPI(payload);
           setEvaluation(text);
         } catch (error) {
-          if (error.message === "API_KEY_ERROR" || error.message === "API_KEY_EMPTY") {
-            setEvaluation("앗! API 키가 잘못되었습니다. 코드를 다시 확인해주세요! 😭");
-          } else if (error.message === "MODEL_NOT_FOUND") {
-            setEvaluation("앗! 구글 서버에서 AI 모델을 찾지 못했어요(404오류). API 권한 설정을 확인해주세요! 😥");
+          if (error.message === "API_KEY_ERROR") {
+            setEvaluation("앗! API 키가 잘못되었습니다. 새로 발급받은 키를 정확히 넣었는지 확인해주세요! 😭");
           } else {
-            setEvaluation("선생님이 잠시 자리를 비우셨어요. 잠시 후 다시 시도해주세요! 😅");
+            setEvaluation("선생님이 잠시 자리를 비우셨어요. 잠시 후 다시 시도해주세요! (404 오류가 반복되면 새 API 키가 필요할 수 있습니다.) 😅");
           }
         } finally {
           setIsEvaluating(false);
@@ -141,12 +147,10 @@
           setInputValue("");
           inputRef.current?.focus();
         } catch (err) {
-          if (err.message === "API_KEY_ERROR" || err.message === "API_KEY_EMPTY") {
-            setErrorMsg("API 키가 없습니다! 깃허브 코드에 API 키를 정확히 넣어주세요.");
-          } else if (err.message === "MODEL_NOT_FOUND") {
-            setErrorMsg("AI 모델 접근 오류(404)입니다. 구글 API 키 권한을 확인해주세요.");
+          if (err.message === "API_KEY_ERROR") {
+            setErrorMsg("API 키가 잘못되었습니다. 새로 발급받은 키를 사용해 보세요!");
           } else {
-            setErrorMsg("음식을 분석하는 중 오류가 발생했어요. 다시 시도해주세요!");
+            setErrorMsg("분석 모델을 찾을 수 없거나 통신 오류가 발생했어요. 새 API 키로 교체해 보시는 걸 추천드려요.");
           }
         } finally {
           setIsLoading(false);
@@ -160,7 +164,6 @@
 
       useEffect(() => { setEvaluation(""); }, [tray]);
 
-      // 규칙 검사
       const counts = {
         grain: tray.filter(f => f.category === 'grain').length,
         veg: tray.filter(f => f.category === 'veg').length,
@@ -185,8 +188,6 @@
       return (
         <div className="min-h-screen p-4 md:p-8 font-sans text-gray-800 flex flex-col items-center">
           <div className="w-full max-w-6xl space-y-6">
-            
-            {/* 타이틀 */}
             <header className="text-center space-y-3 bg-white p-6 rounded-3xl shadow-sm border border-sky-100">
               <h1 className="text-3xl md:text-4xl font-extrabold text-sky-600 flex items-center justify-center gap-2">
                 <span>✨</span> AI와 함께 짜는 균형 잡힌 식단
@@ -195,12 +196,9 @@
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
-              
-              {/* 왼쪽: 검색 영역 */}
               <div className="lg:col-span-5 flex flex-col gap-6 w-full">
                 <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
                   <h2 className="text-xl font-bold mb-4">✍️ 먹고 싶은 음식 입력</h2>
-                  
                   <form onSubmit={handleAddFood} className="flex flex-col gap-3">
                     <input
                       ref={inputRef}
@@ -215,9 +213,7 @@
                       {isLoading ? "⏳ AI 분석 중..." : "식판에 담기"}
                     </button>
                   </form>
-
                   {errorMsg && <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-bold rounded-xl break-words">⚠️ {errorMsg}</div>}
-
                   <div className="mt-6">
                     <p className="text-sm text-gray-500 font-medium mb-3">ℹ️ 추천 메뉴를 클릭해보세요!</p>
                     <div className="flex flex-wrap gap-2">
@@ -229,8 +225,6 @@
                     </div>
                   </div>
                 </div>
-
-                {/* 색상 안내 */}
                 <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
                   <h3 className="font-bold text-gray-700 mb-3 text-sm">식품 구성 자전거 색상 안내</h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -243,14 +237,12 @@
                 </div>
               </div>
 
-              {/* 오른쪽: 식판 영역 */}
               <div className="lg:col-span-7 flex flex-col gap-6 w-full">
                 <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold">🍱 나의 AI 식판 ({tray.length}개)</h2>
                     <button onClick={() => setTray([])} className="text-sm text-gray-500 hover:text-red-500 bg-gray-50 px-3 py-1.5 rounded-full">🗑️ 비우기</button>
                   </div>
-                  
                   <div className="bg-gray-100 rounded-2xl p-4 min-h-[260px] shadow-inner border-4 border-gray-200 flex flex-wrap content-start gap-3">
                     {tray.length === 0 ? (
                       <div className="w-full flex flex-col items-center justify-center text-gray-400 py-10">
@@ -272,10 +264,8 @@
                   </div>
                 </div>
 
-                {/* 규칙 검사 영역 */}
                 <div className={`rounded-3xl shadow-sm p-6 border-2 transition-colors w-full ${isPerfect ? 'bg-green-50 border-green-400' : 'bg-white border-gray-100'}`}>
                   <h2 className="text-xl font-bold mb-5">📋 균형 잡힌 식단 분석</h2>
-                  
                   <div className="space-y-4">
                     <RuleRow ok={rules.rule1} title="1. 매끼 곡류를 주식으로 (1개 이상)" count={counts.grain} items={tray.filter(f=>f.category==='grain')} color="text-yellow-600" />
                     <RuleRow ok={rules.rule2} title="2. 매끼 채소류 2~3가지" count={counts.veg} items={tray.filter(f=>f.category==='veg')} color="text-green-600" isWarn={counts.veg > 3} />
@@ -283,20 +273,16 @@
                     <RuleRow ok={rules.rule4} title="4. 과일류나 우유 (점심에 1개 이상)" count={counts.fruit + counts.dairy} items={tray.filter(f=>f.category==='fruit'||f.category==='dairy')} color="text-blue-500" />
                     <RuleRow ok={rules.rule5} title="5. 유지, 당류는 소량만 (0개 권장)" count={counts.sugar} items={tray.filter(f=>f.category==='sugar')} color="text-gray-500" isWarn={counts.sugar > 0} isSugar={true} />
                   </div>
-
                   {isPerfect && (
                     <div className="mt-6 p-4 bg-green-500 text-white rounded-2xl text-center font-bold animate-bounce shadow-lg">
                       ✨ 훌륭해요! 완벽하게 균형 잡힌 건강한 점심 식단입니다! ✨
                     </div>
                   )}
-
-                  {/* 영양사 평가 버튼 */}
                   {tray.length > 0 && (
                     <div className="mt-6 bg-indigo-50 rounded-2xl p-5 border border-indigo-100 w-full">
                       <button onClick={evaluateDiet} disabled={isEvaluating} className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 text-white font-bold py-3 rounded-xl transition-all shadow-sm">
                         {isEvaluating ? "⏳ 선생님이 식단을 살펴보고 계셔요..." : "✨ AI 영양사 선생님께 식단 평가받기 ✨"}
                       </button>
-
                       {evaluation && (
                         <div className="mt-4 p-4 bg-white rounded-xl border border-indigo-100 text-gray-700 leading-relaxed shadow-inner">
                           <div className="font-bold text-indigo-600 mb-2">👩‍🍳 AI 영양사 선생님의 한마디:</div>
@@ -313,7 +299,6 @@
       );
     }
 
-    // 규칙 검사 행 컴포넌트
     function RuleRow({ ok, title, count, items, color, isWarn = false, isSugar = false }) {
       return (
         <div className="flex justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100">
