@@ -9,10 +9,10 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   
-  <!-- Babel (브라우저에서 React 코드 변환) -->
+  <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Tailwind CSS (디자인) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-sky-50">
@@ -42,18 +42,20 @@
       const [isEvaluating, setIsEvaluating] = useState(false); 
       const inputRef = useRef(null);
 
-      // ⭐️ 선생님, 여기에 새로 발급받으신 진짜 API 키를 넣어주세요! ⭐️
+      // ⭐️ 선생님의 API 키를 여기에 정확히 넣어주세요 (앞뒤 공백 주의) ⭐️
       const apiKey = "AIzaSyBpghtm6HgU88maqQHu7i-cyjcn3UtY86A"; 
 
-      // 🚀 404 에러 방지: 작동하는 모델을 찾을 때까지 여러 개를 시도하는 스마트 호출 함수
+      // 🚀 통신 함수 개선: v1 정식 버전 주소 사용 및 상세 로그 출력
       const callGeminiAPI = async (payload) => {
         if (!apiKey) throw new Error("API_KEY_EMPTY");
         
-        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"];
-        let lastError = null;
+        // 시도해볼 모델 리스트 (가장 흔한 순서)
+        const modelsToTry = ["gemini-1.5-flash", "gemini-pro"];
+        let lastErrorDetail = "";
 
         for (const modelName of modelsToTry) {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+          // v1beta 대신 v1 정식 주소 시도
+          const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
           try {
             const response = await fetch(url, {
               method: 'POST',
@@ -61,31 +63,29 @@
               body: JSON.stringify(payload)
             });
             
+            const responseData = await response.json();
+
             if (response.ok) {
-              const data = await response.json();
-              return data.candidates[0].content.parts[0].text;
+              return responseData.candidates[0].content.parts[0].text;
             }
             
-            if (response.status === 400 || response.status === 403) {
-              throw new Error("API_KEY_ERROR");
-            }
+            // 상세 에러 메시지 추출
+            lastErrorDetail = responseData.error ? responseData.error.message : "알 수 없는 에러";
             
-            // 404인 경우 다음 모델로 시도
             if (response.status === 404) {
-              console.warn(`${modelName} 모델을 찾을 수 없어 다음 모델을 시도합니다.`);
-              continue;
+              console.warn(`${modelName} 모델을 찾을 수 없습니다.`);
+              continue; // 다음 모델로 재시도
             }
             
-            throw new Error(`API Error: ${response.status}`);
+            throw new Error(lastErrorDetail);
           } catch (error) {
-            if (error.message === "API_KEY_ERROR") throw error;
-            lastError = error;
+            if (error.message.includes("API key")) throw new Error("API_KEY_INVALID");
+            lastErrorDetail = error.message;
           }
         }
-        throw lastError || new Error("모든 모델 호출 실패");
+        throw new Error(lastErrorDetail || "통신 실패");
       };
 
-      // 1. 음식 영양소 분류 (AI)
       const analyzeFoodCategory = async (foodName) => {
         const systemInstruction = `당신은 초등학교 실과 영양사 선생님입니다. 사용자가 입력한 음식을 '식품 구성 자전거'의 6가지 식품군 중 하나로 분류하고 이모지를 골라주세요. 반드시 JSON 형식으로만 응답하세요: {"category": "분류ID", "emoji": "이모지"}. 
         분류 ID: grain(곡류), veg(채소류), protein(단백질류), fruit(과일류), dairy(유제품류), sugar(유지당류)`;
@@ -101,14 +101,13 @@
         return JSON.parse(cleanText);
       };
 
-      // 2. 식단 한줄평 (AI)
       const evaluateDiet = async () => {
         if (tray.length === 0) return;
         setIsEvaluating(true);
         setEvaluation("");
 
         const foodNames = tray.map(f => f.name).join(', ');
-        const systemInstruction = "당신은 초등학교 영양사 선생님입니다. 5학년 학생이 짠 식단을 보고 칭찬과 부족한 영양소 보충 조언을 2~3문장으로 다정하게 해주세요. 이모지를 적극 사용하세요.";
+        const systemInstruction = "당신은 초등학교 영양사 선생님입니다. 5학년 학생이 짠 식단을 보고 칭찬과 조언을 2~3문장으로 다정하게 해주세요.";
         
         const payload = {
           contents: [{ parts: [{ text: `내 식단: [${foodNames}] 건강한가요?` }] }],
@@ -119,24 +118,17 @@
           const text = await callGeminiAPI(payload);
           setEvaluation(text);
         } catch (error) {
-          if (error.message === "API_KEY_ERROR") {
-            setEvaluation("앗! API 키가 잘못되었습니다. 새로 발급받은 키를 정확히 넣었는지 확인해주세요! 😭");
-          } else {
-            setEvaluation("선생님이 잠시 자리를 비우셨어요. 잠시 후 다시 시도해주세요! (404 오류가 반복되면 새 API 키가 필요할 수 있습니다.) 😅");
-          }
+          setEvaluation(`오류 발생: ${error.message}`);
         } finally {
           setIsEvaluating(false);
         }
       };
 
-      // 식판에 음식 추가
       const handleAddFood = async (e) => {
         e.preventDefault();
         const foodName = inputValue.trim();
         if (!foodName) return;
-
-        if (tray.length >= 8) return setErrorMsg("식판이 가득 찼어요! 음식을 빼고 담아주세요.");
-        if (tray.some(item => item.name === foodName)) return setErrorMsg("이미 식판에 있는 음식이에요!");
+        if (tray.length >= 8) return setErrorMsg("식판이 가득 찼어요!");
 
         setIsLoading(true);
         setErrorMsg("");
@@ -147,11 +139,7 @@
           setInputValue("");
           inputRef.current?.focus();
         } catch (err) {
-          if (err.message === "API_KEY_ERROR") {
-            setErrorMsg("API 키가 잘못되었습니다. 새로 발급받은 키를 사용해 보세요!");
-          } else {
-            setErrorMsg("분석 모델을 찾을 수 없거나 통신 오류가 발생했어요. 새 API 키로 교체해 보시는 걸 추천드려요.");
-          }
+          setErrorMsg(`분석 실패: ${err.message}`);
         } finally {
           setIsLoading(false);
         }
@@ -192,37 +180,33 @@
               <h1 className="text-3xl md:text-4xl font-extrabold text-sky-600 flex items-center justify-center gap-2">
                 <span>✨</span> AI와 함께 짜는 균형 잡힌 식단
               </h1>
-              <p className="text-gray-600 font-medium">먹고 싶은 메뉴를 입력하면 AI 선생님이 식품군을 분석해 줍니다!</p>
+              <p className="text-gray-600 font-medium">먹고 싶은 메뉴를 입력하면 AI 선생님이 분석해 줍니다!</p>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
               <div className="lg:col-span-5 flex flex-col gap-6 w-full">
                 <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
-                  <h2 className="text-xl font-bold mb-4">✍️ 먹고 싶은 음식 입력</h2>
+                  <h2 className="text-xl font-bold mb-4">✍️ 음식 입력</h2>
                   <form onSubmit={handleAddFood} className="flex flex-col gap-3">
                     <input
                       ref={inputRef}
                       type="text"
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      placeholder="예: 제육볶음, 현미밥, 깍두기"
+                      placeholder="예: 보리밥, 소불고기"
                       className="w-full px-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-sky-400 text-lg"
-                      disabled={isLoading}
                     />
                     <button type="submit" disabled={isLoading || !inputValue.trim()} className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl transition-all shadow-sm">
                       {isLoading ? "⏳ AI 분석 중..." : "식판에 담기"}
                     </button>
                   </form>
                   {errorMsg && <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm font-bold rounded-xl break-words">⚠️ {errorMsg}</div>}
-                  <div className="mt-6">
-                    <p className="text-sm text-gray-500 font-medium mb-3">ℹ️ 추천 메뉴를 클릭해보세요!</p>
-                    <div className="flex flex-wrap gap-2">
-                      {['보리밥', '소불고기', '시금치무침', '배추김치', '사과', '우유'].map(item => (
-                        <button key={item} type="button" onClick={() => { setInputValue(item); inputRef.current?.focus(); }} className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 text-sm rounded-full">
-                          {item}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {['보리밥', '소불고기', '시금치무침', '배추김치', '사과'].map(item => (
+                      <button key={item} type="button" onClick={() => setInputValue(item)} className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 text-sm rounded-full border border-sky-100">
+                        {item}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
@@ -238,9 +222,9 @@
               </div>
 
               <div className="lg:col-span-7 flex flex-col gap-6 w-full">
-                <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full">
+                <div className="bg-white rounded-3xl shadow-sm p-6 border border-gray-100 w-full overflow-hidden">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">🍱 나의 AI 식판 ({tray.length}개)</h2>
+                    <h2 className="text-xl font-bold">🍱 나의 AI 식판 ({tray.length}/8)</h2>
                     <button onClick={() => setTray([])} className="text-sm text-gray-500 hover:text-red-500 bg-gray-50 px-3 py-1.5 rounded-full">🗑️ 비우기</button>
                   </div>
                   <div className="bg-gray-100 rounded-2xl p-4 min-h-[260px] shadow-inner border-4 border-gray-200 flex flex-wrap content-start gap-3">
@@ -256,7 +240,7 @@
                           <div key={food.id} onClick={() => handleRemoveFood(food.id)} className={`relative group cursor-pointer w-[90px] h-[95px] rounded-2xl shadow-sm flex flex-col items-center justify-center ${style.bg} border-2 ${style.border} hover:scale-105 transition-transform`}>
                             <span className="text-3xl mb-1">{food.emoji}</span>
                             <span className={`text-[11px] font-bold mt-1 px-1 text-center leading-tight break-words w-full ${style.text}`}>{food.name}</span>
-                            <div className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs">❌</div>
+                            <div className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs w-5 h-5">×</div>
                           </div>
                         );
                       })
@@ -265,27 +249,26 @@
                 </div>
 
                 <div className={`rounded-3xl shadow-sm p-6 border-2 transition-colors w-full ${isPerfect ? 'bg-green-50 border-green-400' : 'bg-white border-gray-100'}`}>
-                  <h2 className="text-xl font-bold mb-5">📋 균형 잡힌 식단 분석</h2>
-                  <div className="space-y-4">
-                    <RuleRow ok={rules.rule1} title="1. 매끼 곡류를 주식으로 (1개 이상)" count={counts.grain} items={tray.filter(f=>f.category==='grain')} color="text-yellow-600" />
-                    <RuleRow ok={rules.rule2} title="2. 매끼 채소류 2~3가지" count={counts.veg} items={tray.filter(f=>f.category==='veg')} color="text-green-600" isWarn={counts.veg > 3} />
-                    <RuleRow ok={rules.rule3} title="3. 고기·생선·달걀·콩류 1~2가지" count={counts.protein} items={tray.filter(f=>f.category==='protein')} color="text-red-500" isWarn={counts.protein > 2} />
-                    <RuleRow ok={rules.rule4} title="4. 과일류나 우유 (점심에 1개 이상)" count={counts.fruit + counts.dairy} items={tray.filter(f=>f.category==='fruit'||f.category==='dairy')} color="text-blue-500" />
-                    <RuleRow ok={rules.rule5} title="5. 유지, 당류는 소량만 (0개 권장)" count={counts.sugar} items={tray.filter(f=>f.category==='sugar')} color="text-gray-500" isWarn={counts.sugar > 0} isSugar={true} />
+                  <h2 className="text-xl font-bold mb-5 flex items-center gap-2">📋 영양 분석</h2>
+                  <div className="space-y-3">
+                    <RuleRow ok={rules.rule1} title="1. 매끼 곡류 주식 (1개 이상)" count={counts.grain} items={tray.filter(f=>f.category==='grain')} color="text-yellow-600" />
+                    <RuleRow ok={rules.rule2} title="2. 매끼 채소류 (2~3가지)" count={counts.veg} items={tray.filter(f=>f.category==='veg')} color="text-green-600" isWarn={counts.veg > 3} />
+                    <RuleRow ok={rules.rule3} title="3. 고기·생선·달걀·콩 (1~2가지)" count={counts.protein} items={tray.filter(f=>f.category==='protein')} color="text-red-500" isWarn={counts.protein > 2} />
+                    <RuleRow ok={rules.rule4} title="4. 과일/유유 (점심 1개 이상)" count={counts.fruit + counts.dairy} items={tray.filter(f=>f.category==='fruit'||f.category==='dairy')} color="text-blue-500" />
+                    <RuleRow ok={rules.rule5} title="5. 당류 자제 (0개 권장)" count={counts.sugar} items={tray.filter(f=>f.category==='sugar')} color="text-gray-500" isWarn={counts.sugar > 0} isSugar={true} />
                   </div>
                   {isPerfect && (
                     <div className="mt-6 p-4 bg-green-500 text-white rounded-2xl text-center font-bold animate-bounce shadow-lg">
-                      ✨ 훌륭해요! 완벽하게 균형 잡힌 건강한 점심 식단입니다! ✨
+                      ✨ 완벽하게 균형 잡힌 식단입니다! ✨
                     </div>
                   )}
                   {tray.length > 0 && (
-                    <div className="mt-6 bg-indigo-50 rounded-2xl p-5 border border-indigo-100 w-full">
+                    <div className="mt-6 bg-indigo-50 rounded-2xl p-4 border border-indigo-100 w-full">
                       <button onClick={evaluateDiet} disabled={isEvaluating} className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 text-white font-bold py-3 rounded-xl transition-all shadow-sm">
-                        {isEvaluating ? "⏳ 선생님이 식단을 살펴보고 계셔요..." : "✨ AI 영양사 선생님께 식단 평가받기 ✨"}
+                        {isEvaluating ? "⏳ 분석 중..." : "✨ AI 선생님 한마디 ✨"}
                       </button>
                       {evaluation && (
                         <div className="mt-4 p-4 bg-white rounded-xl border border-indigo-100 text-gray-700 leading-relaxed shadow-inner">
-                          <div className="font-bold text-indigo-600 mb-2">👩‍🍳 AI 영양사 선생님의 한마디:</div>
                           <p className="whitespace-pre-wrap">{evaluation}</p>
                         </div>
                       )}
@@ -303,15 +286,13 @@
       return (
         <div className="flex justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100">
           <div className="flex items-center gap-3">
-            <span className="text-xl flex-shrink-0">{ok ? '✅' : (isSugar ? '❌' : '⚠️')}</span>
+            <span className="text-xl">{ok ? '✅' : (isSugar ? '❌' : '⚠️')}</span>
             <div>
-              <p className={ok ? 'font-bold text-gray-800' : (isSugar ? 'text-red-600 font-bold' : 'text-gray-600 font-medium')}>{title}</p>
-              {count > 0 && <p className={`text-xs mt-1 break-words ${color}`}>{items.map(f => f.name).join(', ')}</p>}
+              <p className={ok ? 'font-bold text-gray-800 text-sm' : 'text-gray-600 text-sm font-medium'}>{title}</p>
+              {count > 0 && <p className={`text-[11px] mt-1 break-words ${color}`}>{items.map(f => f.name).join(', ')}</p>}
             </div>
           </div>
-          <span className={`text-sm font-bold border px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2 ${isWarn ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200'}`}>
-            {count}개
-          </span>
+          <span className={`text-sm font-bold border px-2 py-1 rounded-lg ${isWarn ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200'}`}>{count}개</span>
         </div>
       );
     }
