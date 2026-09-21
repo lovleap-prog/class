@@ -4,216 +4,285 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>한글날 자음 뽑기</title>
+<!-- 픽셀 한글 폰트(인터넷 연결 시 적용, 없으면 기본 폰트로 표시) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css">
 <style>
   :root{
-    --bg:#1d2b1f;
-    --bg2:#2b3d2c;
-    --panel:#3a2a1c;
-    --panel-light:#5b4127;
-    --grass:#5fa832;
-    --grass-dark:#3c7420;
-    --gold:#ffd93b;
-    --ink:#f6f2e7;
-    --ink-dim:#c9c0ab;
-    --shadow:#0c130d;
+    --gui:#c6c6c6;        /* 마크 GUI 회색 */
+    --gui-dark:#373737;
+    --slot:#8b8b8b;
+    --gold:#ffd83d;       /* 마크 타이틀 노랑 */
+    --white:#ffffff;
+    --shadow:#3f3f3f;
+    --green:#5ba528;
+    --green-dark:#3b6d1a;
+    --px:4px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
+  img,canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+
   body{
-    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
-    background:
-      radial-gradient(circle at 50% 0%, #34492f 0%, var(--bg) 55%, #121a13 100%);
-    color:var(--ink);
+    font-family:'Galmuri11','DungGeunMo','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    color:var(--white);
     min-height:100%;
     display:flex;flex-direction:column;align-items:center;
-    padding:18px 16px 40px;
+    padding:16px 12px 34px;
+    background-color:#5b4029;
+    background-size:96px 96px;
+    image-rendering:pixelated;
     overflow-x:hidden;
+    text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.55);
   }
+  body::before{ /* 어둡게 깔아주는 오버레이 */
+    content:"";position:fixed;inset:0;background:rgba(0,0,0,.45);pointer-events:none;z-index:0;
+  }
+  body > *{position:relative;z-index:1}
 
-  /* ---------- 헤더 ---------- */
-  header{text-align:center;margin-bottom:14px}
+  /* ---------- 타이틀 ---------- */
+  header{text-align:center;margin-bottom:10px;position:relative}
   h1{
-    font-size:clamp(26px,5vw,46px);
-    letter-spacing:2px;
-    text-shadow:0 4px 0 var(--grass-dark), 0 8px 12px var(--shadow);
+    font-size:clamp(22px,4.6vw,44px);letter-spacing:2px;line-height:1.3;
+    color:var(--white);
   }
   h1 .em{color:var(--gold)}
-  .mission{
-    margin-top:8px;font-size:clamp(13px,2.4vw,18px);color:var(--ink-dim);
+  .splash{
+    display:inline-block;color:var(--gold);font-size:clamp(11px,2vw,16px);
+    transform:rotate(-14deg);margin-top:8px;
+    animation:bob .6s ease-in-out infinite alternate;
+  }
+  @keyframes bob{from{transform:rotate(-14deg) scale(1)}to{transform:rotate(-14deg) scale(1.12)}}
+  .mission{margin-top:18px;font-size:clamp(11px,2.1vw,16px);color:#f0f0f0}
+
+  /* ---------- 마크 GUI 패널 ---------- */
+  .panel{
+    background-color:var(--gui);background-size:64px 64px;
+    box-shadow:
+      inset var(--px) var(--px) 0 rgba(255,255,255,.55),
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.4),
+      0 0 0 var(--px) #1d1d1d, 0 10px 0 rgba(0,0,0,.35);
+    padding:clamp(14px,3vw,26px);
+    margin-top:16px;width:min(800px,100%);
   }
 
-  /* ---------- 모드 선택 ---------- */
-  .modes{display:flex;gap:10px;margin:16px 0 6px;flex-wrap:wrap;justify-content:center}
-  .mode-btn{
-    font:inherit;font-size:clamp(14px,2.2vw,18px);font-weight:700;
-    padding:12px 20px;cursor:pointer;color:var(--ink);
-    background:var(--panel);
-    border:4px solid var(--panel-light);
-    border-radius:4px;
-    box-shadow:0 5px 0 #20160e;
-    transition:transform .08s, background .15s;
+  /* ---------- 마크 버튼 ---------- */
+  .mc-btn{
+    font:inherit;color:var(--white);cursor:pointer;display:inline-block;
+    background-color:#8a8a8a;background-size:64px 64px;
+    border:0;padding:14px 22px;
+    font-size:clamp(13px,2.2vw,19px);letter-spacing:1px;
+    text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.6);
+    box-shadow:
+      inset var(--px) var(--px) 0 rgba(255,255,255,.45),
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.45),
+      0 0 0 var(--px) #1d1d1d;
+    transition:filter .1s;
   }
-  .mode-btn:hover{background:var(--panel-light)}
-  .mode-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #20160e}
-  .mode-btn[aria-pressed="true"]{
-    background:var(--grass);border-color:#7bc94a;color:#10230a;
-    box-shadow:0 5px 0 var(--grass-dark);
+  .mc-btn:hover:not(:disabled){filter:brightness(1.22) saturate(1.2)}
+  .mc-btn:active:not(:disabled){
+    box-shadow:
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(255,255,255,.35),
+      inset var(--px) var(--px) 0 rgba(0,0,0,.45),
+      0 0 0 var(--px) #1d1d1d;
+    transform:translateY(2px);
   }
+  .mc-btn:disabled{filter:grayscale(.6) brightness(.75);cursor:not-allowed}
+  .mc-btn.primary{background-color:var(--green)}
+  .mc-btn[aria-pressed="true"]{background-color:var(--green);outline:var(--px) solid var(--gold);outline-offset:var(--px)}
 
-  /* ---------- 슬롯 ---------- */
+  .modes{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+  /* ---------- 슬롯(인벤토리 칸) ---------- */
   .stage{
-    display:flex;gap:clamp(14px,4vw,40px);
-    margin:26px 0 8px;perspective:900px;flex-wrap:wrap;justify-content:center;
+    display:flex;gap:clamp(14px,4vw,36px);justify-content:center;flex-wrap:wrap;
+    margin:22px 0 4px;perspective:900px;
   }
-  .slot{display:flex;flex-direction:column;align-items:center;gap:10px}
-  .slot-label{
-    font-size:clamp(12px,2vw,16px);font-weight:700;color:var(--ink-dim);
-    letter-spacing:1px;
-  }
+  .slot{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .slot-label{font-size:clamp(10px,1.8vw,14px);color:#ffffff;letter-spacing:1px}
   .card{
-    width:clamp(130px,30vw,220px);
-    height:clamp(150px,34vw,250px);
+    width:clamp(126px,29vw,200px);height:clamp(126px,29vw,200px);
     display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(180deg,#fffdf4,#e9e0c8);
-    border:6px solid #8b6b3d;
-    border-radius:10px;
-    box-shadow:0 10px 0 #5a4325, 0 18px 28px rgba(0,0,0,.45);
-    transform-style:preserve-3d;
-    position:relative;
+    background-color:var(--slot);background-size:64px 64px;
+    box-shadow:
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(255,255,255,.5),
+      inset var(--px) var(--px) 0 rgba(0,0,0,.5),
+      0 0 0 var(--px) #1d1d1d;
+    transform-style:preserve-3d;position:relative;
   }
-  .card.active{border-color:var(--gold);box-shadow:0 10px 0 #b8901c, 0 0 28px rgba(255,217,59,.5)}
-  .char{
-    font-size:clamp(72px,18vw,150px);
-    font-weight:800;color:#23301f;line-height:1;
-    user-select:none;
-  }
-  .char.empty{color:#bfb59a}
+  .card canvas{width:74%;height:74%}
+  .card.active{outline:var(--px) solid var(--gold);outline-offset:var(--px)}
   .name{
-    font-size:clamp(14px,2.6vw,22px);font-weight:700;color:var(--gold);
+    font-size:clamp(13px,2.4vw,20px);color:var(--gold);
     min-height:1.4em;letter-spacing:2px;
   }
 
   /* 뱅글뱅글 회전 */
   .card.spinning{animation:spin3d .42s linear infinite}
   @keyframes spin3d{
-    0%{transform:rotateY(0deg) scale(1)}
+    0%{transform:rotateY(0) scale(1)}
     50%{transform:rotateY(180deg) scale(1.06)}
     100%{transform:rotateY(360deg) scale(1)}
   }
-  .card.landed{animation:land .55s cubic-bezier(.2,1.5,.4,1)}
+  .card.landed{animation:land .5s steps(4,end)}
   @keyframes land{
-    0%{transform:scale(1.28) rotate(-8deg)}
-    55%{transform:scale(.94) rotate(4deg)}
-    100%{transform:scale(1) rotate(0)}
-  }
-  .card.landed::after{
-    content:"";position:absolute;inset:-14px;border-radius:14px;
-    border:5px solid var(--gold);opacity:0;
-    animation:ring .6s ease-out;
-  }
-  @keyframes ring{0%{opacity:.9;transform:scale(.85)}100%{opacity:0;transform:scale(1.25)}}
-
-  /* ---------- 조작 버튼 ---------- */
-  .controls{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;justify-content:center}
-  .btn{
-    font:inherit;font-weight:800;cursor:pointer;color:#10230a;
-    background:var(--grass);
-    border:5px solid #7bc94a;border-radius:6px;
-    padding:16px 34px;font-size:clamp(17px,3vw,26px);
-    box-shadow:0 7px 0 var(--grass-dark);
-    transition:transform .08s,filter .15s;
-  }
-  .btn:hover{filter:brightness(1.08)}
-  .btn:active{transform:translateY(4px);box-shadow:0 3px 0 var(--grass-dark)}
-  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
-  .btn.ghost{
-    background:var(--panel);color:var(--ink);border-color:var(--panel-light);
-    box-shadow:0 7px 0 #20160e;padding:16px 24px;
+    0%{transform:scale(1.3)}
+    40%{transform:scale(.92)}
+    70%{transform:scale(1.06)}
+    100%{transform:scale(1)}
   }
 
-  /* ---------- 옵션 ---------- */
-  .options{display:flex;gap:18px;margin-top:22px;flex-wrap:wrap;justify-content:center;
-    font-size:clamp(12px,2vw,15px);color:var(--ink-dim)}
+  .controls{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+  .controls .mc-btn{padding:16px 32px;font-size:clamp(15px,2.8vw,24px)}
+
+  .options{
+    display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;
+    font-size:clamp(10px,1.8vw,14px);color:#ffffff;
+  }
   .options label{display:flex;align-items:center;gap:7px;cursor:pointer}
-  .options input{width:18px;height:18px;accent-color:var(--grass);cursor:pointer}
+  .options input{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
 
-  /* ---------- 기록 ---------- */
-  .history{margin-top:26px;width:min(760px,100%);text-align:center}
-  .history h2{font-size:14px;color:var(--ink-dim);letter-spacing:2px;margin-bottom:10px}
-  .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:42px}
-  .chip{
-    background:var(--panel);border:3px solid var(--panel-light);border-radius:4px;
-    padding:6px 12px;font-size:clamp(15px,2.4vw,20px);font-weight:700;letter-spacing:3px;
+  /* ---------- 핫바(기록) ---------- */
+  .hotbar-wrap{margin-top:22px;text-align:center}
+  .hotbar-wrap h2{font-size:clamp(10px,1.8vw,14px);color:#dcdcdc;letter-spacing:2px;margin-bottom:10px}
+  .hotbar{
+    display:inline-flex;gap:0;padding:var(--px);
+    background-color:#8a8a8a;background-size:64px 64px;
+    box-shadow:
+      inset var(--px) var(--px) 0 rgba(255,255,255,.5),
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(0,0,0,.4),
+      0 0 0 var(--px) #1d1d1d;
+    max-width:100%;flex-wrap:wrap;justify-content:center;
   }
-  .hint{margin-top:18px;font-size:12px;color:#8e896f}
+  .cell{
+    width:clamp(46px,9vw,64px);height:clamp(46px,9vw,64px);margin:var(--px);
+    background-color:var(--slot);
+    display:flex;align-items:center;justify-content:center;gap:2px;
+    box-shadow:
+      inset calc(var(--px)*-1) calc(var(--px)*-1) 0 rgba(255,255,255,.45),
+      inset var(--px) var(--px) 0 rgba(0,0,0,.45);
+  }
+  .cell canvas{width:42%;height:42%}
+  .cell.newest{outline:2px solid var(--gold);outline-offset:-2px}
+
+  .hint{margin-top:18px;font-size:clamp(9px,1.6vw,12px);color:#bdbdbd;text-align:center}
   .hint kbd{
-    background:#2a2a22;border:2px solid #4a463a;border-radius:3px;
-    padding:1px 6px;font-size:11px;color:var(--ink-dim);
+    background:#5a5a5a;padding:2px 7px;color:#fff;text-shadow:none;
+    box-shadow:inset 2px 2px 0 rgba(255,255,255,.35), inset -2px -2px 0 rgba(0,0,0,.4);
   }
 
-  /* 반짝이 파티클 */
-  .spark{
-    position:fixed;pointer-events:none;font-size:22px;z-index:30;
-    animation:fly .9s ease-out forwards;
+
+  /* ---------- 예시 낱말(마크 툴팁 느낌) ---------- */
+  .hint-box{margin-top:18px;text-align:center}
+  .book{
+    margin:14px auto 0;max-width:620px;text-align:left;
+    background:#170a21;padding:14px 16px;
+    box-shadow:
+      inset 0 0 0 var(--px) #3b1e6e,
+      inset 0 0 0 calc(var(--px)*2) #170a21,
+      0 0 0 var(--px) #0b0410;
   }
+  .book-title{color:#ffffff;font-size:clamp(12px,2vw,16px);margin-bottom:10px;letter-spacing:1px}
+  .book-title b{color:var(--gold)}
+  .book-list{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .book-list li{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;line-height:1.5}
+  .bw{color:var(--gold);font-size:clamp(14px,2.6vw,20px)}
+  .bm{color:#cfcfcf;font-size:clamp(10px,1.9vw,14px)}
+  .bt{
+    color:#55ffff;font-size:clamp(9px,1.6vw,12px);
+    border:2px solid rgba(85,255,255,.45);padding:1px 6px;
+  }
+  .book-foot{margin-top:12px;color:#a9a9a9;font-size:clamp(9px,1.6vw,12px)}
+
+  /* 픽셀 파티클 */
+  .pix{position:fixed;width:10px;height:10px;pointer-events:none;z-index:40;animation:fly .85s steps(8,end) forwards}
   @keyframes fly{
-    0%{opacity:1;transform:translate(0,0) scale(1)}
-    100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}
+    0%{opacity:1;transform:translate(0,0)}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy))}
   }
   @media (prefers-reduced-motion:reduce){
-    .card.spinning,.card.landed,.spark{animation-duration:.01ms!important;animation-iteration-count:1!important}
+    .card.spinning,.card.landed,.pix,.splash{animation-duration:.01ms!important;animation-iteration-count:1!important}
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🎮 한글날 <span class="em">자음 뽑기</span></h1>
+  <h1>⛏ 한글날 <span class="em">자음 뽑기</span></h1>
+  <div class="splash" id="splash">한글 최고!</div>
   <p class="mission">뽑은 자음 2개가 들어간 낱말을 말하거나 그려보세요!</p>
 </header>
 
-<div class="modes" role="group" aria-label="뽑기 방식">
-  <button class="mode-btn" id="modeTwo"  aria-pressed="true">⚡ 2개 한번에 뽑기</button>
-  <button class="mode-btn" id="modeOne"  aria-pressed="false">👆 하나씩 뽑기</button>
-</div>
-
-<div class="stage">
-  <div class="slot">
-    <div class="slot-label">첫 번째 자음</div>
-    <div class="card" id="card0"><span class="char empty" id="char0">?</span></div>
-    <div class="name" id="name0"></div>
+<div class="panel">
+  <div class="modes">
+    <button class="mc-btn" id="modeTwo" aria-pressed="true">2개 한번에 뽑기</button>
+    <button class="mc-btn" id="modeOne" aria-pressed="false">하나씩 뽑기</button>
   </div>
-  <div class="slot">
-    <div class="slot-label">두 번째 자음</div>
-    <div class="card" id="card1"><span class="char empty" id="char1">?</span></div>
-    <div class="name" id="name1"></div>
+
+  <div class="stage">
+    <div class="slot">
+      <div class="slot-label">첫 번째 자음</div>
+      <div class="card" id="card0"><canvas id="cv0" width="10" height="10"></canvas></div>
+      <div class="name" id="name0">???</div>
+    </div>
+    <div class="slot">
+      <div class="slot-label">두 번째 자음</div>
+      <div class="card" id="card1"><canvas id="cv1" width="10" height="10"></canvas></div>
+      <div class="name" id="name1">???</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="mc-btn primary" id="drawBtn">자음 뽑기!</button>
+    <button class="mc-btn" id="resetBtn">초기화</button>
+  </div>
+
+
+  <div class="hint-box">
+    <button class="mc-btn" id="hintBtn" disabled>💡 예시 낱말 보기</button>
+    <div class="book" id="book" hidden>
+      <div class="book-title" id="bookTitle"></div>
+      <ul class="book-list" id="bookList"></ul>
+      <div class="book-foot">두 자음이 모두 들어가면 몇 글자든 좋아요! (예: ㅅ + ㅈ → 세종대왕)</div>
+    </div>
+  </div>
+
+  <div class="options">
+    <label><input type="checkbox" id="optDup"> 같은 자음 중복 허용</label>
+    <label><input type="checkbox" id="optSound" checked> 효과음</label>
   </div>
 </div>
 
-<div class="controls">
-  <button class="btn" id="drawBtn">자음 뽑기!</button>
-  <button class="btn ghost" id="resetBtn">초기화</button>
-</div>
-
-<div class="options">
-  <label><input type="checkbox" id="optDup"> 같은 자음 중복 허용</label>
-  <label><input type="checkbox" id="optSound" checked> 효과음</label>
-</div>
-
-<div class="history">
+<div class="hotbar-wrap">
   <h2>최근 뽑은 자음</h2>
-  <div class="chips" id="chips"></div>
+  <div class="hotbar" id="hotbar"></div>
 </div>
 
-<p class="hint">
-  <kbd>Space</kbd> 뽑기 · <kbd>R</kbd> 초기화 · <kbd>F</kbd> 전체화면
-</p>
+<p class="hint"><kbd>Space</kbd> 뽑기 · <kbd>R</kbd> 초기화 · <kbd>F</kbd> 전체화면 · <kbd>H</kbd> 예시 낱말</p>
 
 <script>
 (function () {
   "use strict";
 
-  // 쌍자음(ㄲㄸㅃㅆㅉ) 제외한 기본 자음 14개
+  /* =========================================================
+     1. 자음 도트 글리프 (9x9 픽셀, 쌍자음 제외 14개)
+     ========================================================= */
+  const G = {
+    "ㄱ": ["#########","........#","........#","........#","........#","........#","........#","........#","........#"],
+    "ㄴ": ["#........","#........","#........","#........","#........","#........","#........","#........","#########"],
+    "ㄷ": ["#########","#........","#........","#........","#........","#........","#........","#........","#########"],
+    "ㄹ": ["#########","........#","........#","........#","#########","#........","#........","#........","#########"],
+    "ㅁ": ["#########","#.......#","#.......#","#.......#","#.......#","#.......#","#.......#","#.......#","#########"],
+    "ㅂ": ["#.......#","#.......#","#.......#","#.......#","#########","#.......#","#.......#","#.......#","#########"],
+    "ㅅ": ["....#....","....#....","...#.#...","...#.#...","..#...#..","..#...#..",".#.....#.",".#.....#.","#.......#"],
+    "ㅇ": ["...###...","..#...#..",".#.....#.","#.......#","#.......#","#.......#",".#.....#.","..#...#..","...###..."],
+    "ㅈ": ["#########","....#....","...#.#...","...#.#...","..#...#..","..#...#..",".#.....#.",".#.....#.","#.......#"],
+    "ㅊ": ["....#....","#########","....#....","...#.#...","...#.#...","..#...#..","..#...#..",".#.....#.","#.......#"],
+    "ㅋ": ["#########","........#","........#","........#","#########","........#","........#","........#","........#"],
+    "ㅌ": ["#########","#........","#........","#........","#########","#........","#........","#........","#########"],
+    "ㅍ": ["#########","..#...#..","..#...#..","..#...#..","..#...#..","..#...#..","..#...#..","..#...#..","#########"],
+    "ㅎ": ["....#....","#########","...###...","..#...#..",".#.....#.",".#.....#.",".#.....#.","..#...#..","...###..."]
+  };
+
   const CONSONANTS = [
     { ch: "ㄱ", name: "기역" }, { ch: "ㄴ", name: "니은" },
     { ch: "ㄷ", name: "디귿" }, { ch: "ㄹ", name: "리을" },
@@ -224,20 +293,383 @@
     { ch: "ㅍ", name: "피읖" }, { ch: "ㅎ", name: "히읗" }
   ];
 
+  // 캔버스는 10x10 (9x9 글리프 + 1px 마크식 그림자), CSS가 픽셀 그대로 확대
+  function drawGlyph(cv, ch, color) {
+    const g = cv.getContext("2d");
+    g.clearRect(0, 0, 10, 10);
+    const pat = G[ch];
+    if (!pat) return;
+    for (let pass = 0; pass < 2; pass++) {
+      g.fillStyle = pass === 0 ? "rgba(0,0,0,.55)" : (color || "#ffffff");
+      const off = pass === 0 ? 1 : 0;
+      for (let y = 0; y < 9; y++)
+        for (let x = 0; x < 9; x++)
+          if (pat[y][x] === "#") g.fillRect(x + off, y + off, 1, 1);
+    }
+  }
+
+  /* =========================================================
+     2. 블록 텍스처 생성 (흙 / 돌 / 나무) — 외부 이미지 없음
+     ========================================================= */
+  function rng(seed) { return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+  function tex(paint) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 16;
+    paint(c.getContext("2d"), rng(20251009));
+    return "url(" + c.toDataURL() + ")";
+  }
+  const dirtTex = tex((g, r) => {
+    const p = ["#866043", "#79553a", "#6b4a31", "#8f6a4a", "#5e4029"];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      g.fillStyle = p[Math.floor(r() * p.length)]; g.fillRect(x, y, 1, 1);
+    }
+  });
+  const stoneTex = tex((g, r) => {
+    const p = ["#7d7d7d", "#8a8a8a", "#727272", "#949494", "#6b6b6b"];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      g.fillStyle = p[Math.floor(r() * p.length)]; g.fillRect(x, y, 1, 1);
+    }
+  });
+  const plankTex = tex((g, r) => {
+    const p = ["#b8945f", "#a9854f", "#c1a06c", "#9d7a47"];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      g.fillStyle = p[Math.floor(r() * p.length)]; g.fillRect(x, y, 1, 1);
+    }
+    g.fillStyle = "#6f5531";                       // 판자 경계선
+    g.fillRect(0, 3, 16, 1); g.fillRect(0, 11, 16, 1);
+    g.fillRect(7, 0, 1, 4); g.fillRect(3, 4, 1, 7); g.fillRect(12, 12, 1, 4);
+  });
+
+  document.body.style.backgroundImage = dirtTex;
+  document.querySelectorAll(".panel, .hotbar").forEach((el) => { el.style.backgroundImage = plankTex; });
+  document.querySelectorAll(".mc-btn, .card, .cell").forEach((el) => { el.style.backgroundImage = stoneTex; });
+
+
+  /* =========================================================
+     3. 예시 낱말 사전 (오프라인 내장 — 인터넷/로그인 불필요)
+        [낱말, 뜻, 갈래]
+     ========================================================= */
+  const WORDS = [
+["한글","세종대왕이 만든 우리 글자의 이름","한글날"],
+["닿소리","'자음'을 가리키는 순우리말","한글날"],
+["홀소리","'모음'을 가리키는 순우리말","한글날"],
+["첫소리","글자의 맨 앞에 오는 자음(초성)","한글날"],
+["끝소리","글자의 끝에 붙는 자음(종성)","한글날"],
+["받침","글자 아래에 붙여 쓰는 자음","한글날"],
+["낱말","뜻을 지닌 말의 가장 작은 덩어리","한글날"],
+["글월","글이나 문장을 이르는 말","한글날"],
+["글씨","써 놓은 글자의 모양","한글날"],
+["말씀","'말'을 높여 이르는 말","한글날"],
+["훈민정음","한글의 첫 이름, '백성을 가르치는 바른 소리'","한글날"],
+["세종대왕","한글을 만드신 조선의 임금","한글날"],
+["집현전","세종대왕이 학자들과 공부하던 곳","한글날"],
+["백성","나라의 사람들을 이르던 옛말","한글날"],
+["붓글씨","붓으로 쓴 글씨","한글날"],
+["두루마리","둘둘 말아 놓은 종이","순우리말"],
+["이야기","겪은 일이나 생각을 말로 풀어내는 것","우리말"],
+["목소리","목에서 나오는 소리","순우리말"],
+["노래","가락에 맞추어 부르는 소리","순우리말"],
+["배움","새로운 것을 익히는 일","순우리말"],
+["가르침","남을 이끌어 알게 해 주는 일","순우리말"],
+["슬기","이치를 밝게 헤아리는 재주(지혜)","순우리말"],
+["어울림","서로 잘 어우러지는 것","순우리말"],
+["나눔","함께 나누어 가지는 일","순우리말"],
+["보람","한 일에서 얻는 좋은 결과나 기쁨","순우리말"],
+
+["하늘","해와 달과 별이 있는 넓은 곳","순우리말"],
+["가람","'강'을 뜻하는 옛 우리말","순우리말"],
+["미르","'용'을 뜻하는 옛 우리말","순우리말"],
+["나래","'날개'를 정답게 이르는 말","순우리말"],
+["노을","해 질 무렵 하늘이 붉게 물드는 것","순우리말"],
+["이슬","풀잎에 맺힌 작은 물방울","순우리말"],
+["무지개","비 온 뒤 하늘에 뜨는 일곱 빛깔 띠","순우리말"],
+["샛별","새벽 동쪽 하늘에 뜨는 별","순우리말"],
+["별빛","별에서 비치는 빛","순우리말"],
+["달빛","달에서 비치는 빛","순우리말"],
+["햇살","해에서 뻗어 나오는 빛줄기","순우리말"],
+["바람","공기의 흐름","순우리말"],
+["산들바람","시원하고 부드럽게 부는 바람","순우리말"],
+["소나기","갑자기 세차게 쏟아지다 그치는 비","순우리말"],
+["여우비","볕이 난 채로 잠깐 내리는 비","순우리말"],
+["는개","안개보다 굵고 이슬비보다 가는 비","순우리말"],
+["함박눈","굵고 탐스럽게 내리는 눈","순우리말"],
+["진눈깨비","비가 섞여 내리는 눈","순우리말"],
+["꽃샘추위","이른 봄 꽃 필 무렵 찾아오는 추위","순우리말"],
+["무더위","찌는 듯이 더운 날씨","순우리말"],
+["아지랑이","봄날 공기가 아른아른 흔들려 보이는 것","순우리말"],
+["새벽","날이 밝아 올 무렵","순우리말"],
+["아침","날이 밝은 뒤 이른 때","순우리말"],
+["저녁","해가 질 무렵","순우리말"],
+["한낮","낮의 한가운데","순우리말"],
+["한밤중","깊은 밤","순우리말"],
+["구름","하늘에 떠 있는 물방울 덩어리","순우리말"],
+["안개","땅 가까이 뿌옇게 끼는 김","순우리말"],
+["서리","찬 기운에 얼어붙은 이슬","순우리말"],
+["고드름","처마 끝에 매달려 언 얼음","순우리말"],
+["옹달샘","작고 오목한 샘","순우리말"],
+["시냇물","골짜기를 흐르는 작은 물줄기","순우리말"],
+["물결","물이 일렁이며 이루는 결","순우리말"],
+["모래톱","강가나 바닷가에 모래가 쌓인 곳","순우리말"],
+["갯벌","바닷물이 드나드는 진흙 벌판","순우리말"],
+["들녘","넓게 펼쳐진 들","순우리말"],
+["언덕","나지막하게 솟은 땅","순우리말"],
+["골짜기","산과 산 사이 움푹 팬 곳","순우리말"],
+["비탈길","비스듬히 기울어진 길","순우리말"],
+["오솔길","호젓하고 좁은 길","순우리말"],
+["지름길","돌아가지 않고 가깝게 가는 길","순우리말"],
+["숲길","숲 사이로 난 길","순우리말"],
+["나루터","배가 드나드는 곳","순우리말"],
+["돌담","돌로 쌓은 담","순우리말"],
+["울타리","집이나 밭 둘레를 두른 담","순우리말"],
+["오두막","작고 허름한 집","순우리말"],
+["굴뚝","연기가 빠져나가는 통로","순우리말"],
+["모닥불","나뭇가지를 모아 피운 불","순우리말"],
+["횃불","막대 끝에 불을 붙여 든 불","순우리말"],
+["불씨","불을 일으키는 작은 불","순우리말"],
+["그림자","빛이 막혀 생기는 검은 형체","순우리말"],
+["발자국","발로 밟은 자리에 남은 흔적","순우리말"],
+["허수아비","새를 쫓으려 논밭에 세운 인형","순우리말"],
+["두레박","우물물을 긷는 그릇","순우리말"],
+["지게","짐을 얹어 등에 지는 우리 연장","순우리말"],
+["곡괭이","땅이나 돌을 파는 연장","순우리말"],
+["쟁기","소가 끌어 밭을 가는 연장","순우리말"],
+["수레","바퀴를 달아 짐을 싣는 기구","순우리말"],
+["뗏목","통나무를 엮어 만든 배","순우리말"],
+["징검다리","돌을 놓아 건너다니게 만든 다리","순우리말"],
+["빗자루","먼지나 쓰레기를 쓰는 도구","순우리말"],
+["멍석","짚으로 엮은 큰 깔개","순우리말"],
+
+["다람쥐","볼주머니에 먹이를 넣는 작은 동물","순우리말"],
+["두더지","땅속에 굴을 파고 사는 동물","순우리말"],
+["고슴도치","가시털이 돋은 작은 동물","순우리말"],
+["너구리","개와 비슷하게 생긴 산짐승","순우리말"],
+["고라니","우리나라 산과 들에 사는 사슴 무리","순우리말"],
+["반딧불이","꽁무니에서 빛을 내는 곤충","순우리말"],
+["소금쟁이","물 위를 미끄러지듯 걷는 곤충","순우리말"],
+["무당벌레","둥근 등에 점이 있는 곤충","순우리말"],
+["사슴벌레","큰턱이 사슴뿔처럼 생긴 곤충","순우리말"],
+["잠자리","얇은 날개로 나는 곤충","순우리말"],
+["나비","꽃을 찾아 날아다니는 곤충","순우리말"],
+["개구리","물과 뭍에서 사는 동물","순우리말"],
+["올챙이","개구리의 새끼","순우리말"],
+["미꾸라지","진흙 속에 사는 미끄러운 물고기","순우리말"],
+["피라미","냇물에 사는 작은 물고기","순우리말"],
+["송사리","아주 작은 민물고기","순우리말"],
+["딱따구리","나무를 쪼아 벌레를 잡는 새","순우리말"],
+["부엉이","밤에 돌아다니는 새","순우리말"],
+["까치","반가운 손님을 알린다는 새","순우리말"],
+["제비","봄에 찾아오는 철새","순우리말"],
+["기러기","줄지어 날아가는 철새","순우리말"],
+["두루미","다리와 목이 긴 흰 새","순우리말"],
+["병아리","닭의 새끼","순우리말"],
+["송아지","소의 새끼","순우리말"],
+["망아지","말의 새끼","순우리말"],
+["강아지","개의 새끼","순우리말"],
+["호랑이","산속에 사는 큰 짐승","우리말"],
+["토끼","귀가 길고 깡충 뛰는 동물","순우리말"],
+["거북이","등딱지가 단단한 동물","순우리말"],
+["달팽이","껍데기를 지고 다니는 동물","순우리말"],
+["지렁이","땅속을 기어 다니는 동물","순우리말"],
+["두꺼비","몸이 울퉁불퉁한 개구리 무리","순우리말"],
+["메뚜기","풀밭에서 폴짝 뛰는 곤충","순우리말"],
+["귀뚜라미","가을밤에 우는 곤충","순우리말"],
+["매미","여름에 맴맴 우는 곤충","순우리말"],
+["참새","마을에서 흔히 보는 작은 새","순우리말"],
+["까마귀","온몸이 검은 새","순우리말"],
+
+["진달래","이른 봄에 피는 분홍 꽃","순우리말"],
+["개나리","봄에 피는 노란 꽃","순우리말"],
+["민들레","씨앗이 바람에 날아가는 꽃","순우리말"],
+["제비꽃","봄에 피는 보랏빛 작은 꽃","순우리말"],
+["해바라기","해를 따라 도는 큰 꽃","순우리말"],
+["봉숭아","손톱을 붉게 물들이는 꽃","순우리말"],
+["수수꽃다리","라일락을 이르는 우리말","순우리말"],
+["할미꽃","고개를 숙이고 피는 꽃","순우리말"],
+["도라지","뿌리를 먹는 풀","순우리말"],
+["도토리","참나무에 열리는 열매","순우리말"],
+["느티나무","마을을 지키는 크고 오래된 나무","순우리말"],
+["버드나무","가지가 길게 늘어지는 나무","순우리말"],
+["소나무","사철 푸른 나무","순우리말"],
+["대나무","속이 비고 곧게 자라는 나무","순우리말"],
+["단풍잎","가을에 붉게 물든 잎","우리말"],
+["새싹","새로 돋아나는 싹","순우리말"],
+["씨앗","열매 속에 든 씨","순우리말"],
+["열매","식물이 맺는 알","순우리말"],
+["뿌리","땅속으로 뻗은 식물의 밑동","순우리말"],
+["이파리","넓적하게 난 잎","순우리말"],
+["꽃잎","꽃을 이루는 낱낱의 잎","순우리말"],
+["풀잎","풀의 잎","순우리말"],
+["덩굴","길게 뻗어 감아 오르는 줄기","순우리말"],
+["버섯","그늘진 곳에서 자라는 균","순우리말"],
+
+["김밥","밥과 반찬을 김에 말아 싼 음식","우리말"],
+["누룽지","솥 바닥에 눌어붙은 밥","순우리말"],
+["수제비","반죽을 떼어 넣고 끓인 음식","순우리말"],
+["비빔밥","여러 나물에 밥을 비벼 먹는 음식","우리말"],
+["부침개","기름에 지져 낸 음식","순우리말"],
+["떡국","떡을 썰어 넣고 끓인 국","우리말"],
+["미역국","미역을 넣어 끓인 국","우리말"],
+["송편","추석에 빚어 먹는 떡","우리말"],
+["시루떡","시루에 쪄 낸 떡","순우리말"],
+["주전부리","끼니 사이에 먹는 군것질","순우리말"],
+["새참","일하다 참참이 먹는 음식","순우리말"],
+["보리밥","보리로 지은 밥","우리말"],
+["콩나물","콩에서 길러 낸 나물","우리말"],
+["도토리묵","도토리 가루로 쑨 묵","우리말"],
+["칼국수","반죽을 칼로 썰어 만든 국수","우리말"],
+["호떡","속에 꿀을 넣어 지진 떡","우리말"],
+["팥죽","팥을 삶아 쑨 죽","우리말"],
+["찐빵","김에 쪄서 만든 빵","우리말"],
+
+["기쁨","마음이 흐뭇하고 좋은 느낌","순우리말"],
+["웃음","기뻐서 소리 내거나 얼굴에 짓는 것","순우리말"],
+["설렘","기대에 가슴이 두근거리는 마음","순우리말"],
+["그리움","보고 싶어 애타는 마음","순우리말"],
+["믿음","굳게 믿는 마음","순우리말"],
+["꿈길","꿈속에서 걷는 길","순우리말"],
+["다짐","마음을 굳게 먹는 일","순우리말"],
+["시나브로","모르는 사이에 조금씩","순우리말"],
+["함초롬","가지런하고 곱게 젖어 있는 모양","순우리말"],
+["도란도란","정답게 이야기를 나누는 모양","순우리말"],
+["소복소복","눈이 도톰하게 쌓이는 모양","순우리말"],
+["사뿐사뿐","소리 없이 가볍게 걷는 모양","순우리말"],
+["살포시","살며시 가볍게","순우리말"],
+["아름드리","둘레가 한 아름이 넘는 큰 것","순우리말"],
+["오롯이","모자람 없이 온전하게","순우리말"],
+["어린이","나이가 어린 아이","우리말"],
+["동무","늘 가깝게 어울리는 벗","순우리말"],
+["또래","나이나 크기가 비슷한 무리","순우리말"],
+["길라잡이","앞에서 길을 안내해 주는 사람","순우리말"],
+["누리","'세상'을 뜻하는 옛말","순우리말"],
+["온누리","온 세상","순우리말"],
+["벼리","일이나 글의 중심이 되는 줄거리","순우리말"],
+["으뜸","여럿 가운데 가장 뛰어난 것","순우리말"],
+["버금","으뜸의 바로 다음","순우리말"],
+["한가위","추석을 이르는 우리말","순우리말"],
+["잔치","기쁜 일을 축하하며 여는 모임","순우리말"],
+["두근두근","가슴이 자꾸 뛰는 모양","순우리말"],
+["반짝반짝","빛이 자꾸 반짝이는 모양","순우리말"],
+["울긋불긋","여러 빛깔이 뒤섞인 모양","순우리말"],
+["알록달록","여러 빛깔 무늬가 있는 모양","순우리말"],
+
+["휘파람","입술을 오므려 내는 소리","순우리말"],
+["풀피리","풀잎을 입에 대고 부는 피리","순우리말"],
+["탈춤","탈을 쓰고 추는 춤","순우리말"],
+["팽이","채로 쳐서 돌리는 놀잇감","순우리말"],
+["파랑새","행복을 가져다준다는 새","순우리말"],
+["텃밭","집 가까이 일구어 놓은 밭","순우리말"],
+["토끼풀","클로버를 이르는 우리말","순우리말"],
+["키다리","키가 아주 큰 사람","순우리말"],
+["큰형","맏이가 되는 형","우리말"],
+["하품","졸릴 때 입을 크게 벌려 쉬는 숨","순우리말"],
+["흙탕물","흙이 섞여 흐린 물","순우리말"],
+["코털","콧구멍 속에 난 털","순우리말"],
+["초파리","과일에 잘 꼬이는 작은 파리","우리말"],
+["차표","차를 탈 때 내는 표","우리말"],
+["펄펄","눈이나 불길이 세차게 이는 모양","순우리말"],
+["튼튼","굳세고 힘 있는 모양","순우리말"],
+["컴퓨터","정보를 처리해 주는 기계","외래어"],
+["커피","커피나무 열매로 만든 음료","외래어"],
+["쿠키","구워서 만든 과자","외래어"],
+["팝콘","옥수수를 튀겨 만든 과자","외래어"],
+["초콜릿","카카오로 만든 달콤한 과자","외래어"],
+["치타","가장 빠르게 달리는 동물","외래어"],
+["탱크","무한궤도를 단 차","외래어"],
+["조카","형제자매의 아들이나 딸","우리말"],
+["하회탈","안동 하회 마을에서 전해 오는 우리 탈","우리말"],
+["코끼리","코가 길고 몸집이 큰 동물","순우리말"],
+["콩국수","콩국에 말아 먹는 국수","우리말"],
+["천둥","번개가 칠 때 울리는 큰 소리","순우리말"],
+["친구","가깝게 사귀는 벗","우리말"],
+["코뚜레","소의 코에 꿰는 고리","순우리말"],
+["토담","흙으로 쌓아 올린 담","순우리말"],
+["뒤통수","머리의 뒤쪽","순우리말"],
+["들풀","들에 저절로 자라는 풀","순우리말"],
+["해돋이","해가 떠오르는 것","순우리말"],
+["코스모스","가을에 하늘하늘 피는 꽃","외래어"],
+["큰북","소리가 크고 낮은 큰 북","우리말"],
+["밥풀","밥알 하나하나","순우리말"],
+["팔베개","팔을 베고 눕는 것","순우리말"],
+["퉁소","대나무로 만든 우리 악기","순우리말"],
+["잔치국수","잔치 때 말아 먹던 국수","우리말"],
+["잔털","가늘고 짧게 난 털","순우리말"],
+["장터","장이 서는 곳","순우리말"],
+["지푸라기","짚의 낱낱","순우리말"],
+["팔짱","두 팔을 마주 끼는 것","순우리말"],
+["참치","바다에 사는 큰 물고기","우리말"],
+["차츰","조금씩 서서히","순우리말"],
+["치킨","닭을 튀겨 만든 음식","외래어"],
+["후추","맵고 향이 나는 양념","우리말"],
+["켜켜이","여러 켜로 겹겹이","순우리말"],
+["핫케이크","둥글고 도톰하게 구운 빵","외래어"],
+["통통","작고 볼록하게 살이 오른 모양","순우리말"],
+["해파리","바다에 사는 투명한 동물","순우리말"],
+["흙투성이","흙이 잔뜩 묻은 모습","순우리말"],
+["조각칼","나무나 돌을 새길 때 쓰는 칼","우리말"],
+["하하호호","크게 웃는 소리","순우리말"],
+["칼춤","칼을 들고 추는 춤","순우리말"],
+["코뿔소","코 위에 뿔이 난 큰 동물","순우리말"]
+  ];
+
+  // 한글 낱자 분해 (쌍자음·겹받침은 기본 자음으로 풀어서 본다)
+  const CHO = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+  const JONG = ["","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ","ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+  const BASE = {"ㄲ":"ㄱ","ㄸ":"ㄷ","ㅃ":"ㅂ","ㅆ":"ㅅ","ㅉ":"ㅈ","ㄳ":"ㄱㅅ","ㄵ":"ㄴㅈ","ㄶ":"ㄴㅎ",
+                "ㄺ":"ㄹㄱ","ㄻ":"ㄹㅁ","ㄼ":"ㄹㅂ","ㄽ":"ㄹㅅ","ㄾ":"ㄹㅌ","ㄿ":"ㄹㅍ","ㅀ":"ㄹㅎ","ㅄ":"ㅂㅅ"};
+
+  function jamoOf(word) {
+    const out = [];
+    for (const c of word) {
+      const code = c.charCodeAt(0) - 0xAC00;
+      if (code < 0 || code > 11171) continue;
+      [CHO[Math.floor(code / 588)], JONG[code % 28]].forEach((j) => {
+        if (!j) return;
+        for (const x of (BASE[j] || j)) out.push(x);
+      });
+    }
+    return out;
+  }
+
+  const DICT = WORDS.map((w) => ({ w: w[0], m: w[1], t: w[2], j: jamoOf(w[0]) }));
+  const RANK = { "한글날": 0, "순우리말": 1, "우리말": 2, "외래어": 3 };
+
+  function matches(a, b) {
+    return DICT.filter((e) =>
+      a === b ? e.j.filter((x) => x === a).length >= 2
+              : e.j.indexOf(a) >= 0 && e.j.indexOf(b) >= 0);
+  }
+  function examplesFor(a, b, n) {
+    const pool = matches(a, b).slice();
+    for (let i = pool.length - 1; i > 0; i--) {      // 섞은 뒤
+      const k = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[k]] = [pool[k], pool[i]];
+    }
+    pool.sort((x, y) => RANK[x.t] - RANK[y.t]);      // 한글날·순우리말 먼저
+    return { list: pool.slice(0, n), total: pool.length };
+  }
+
+  /* =========================================================
+     4. 앱 로직
+     ========================================================= */
   const $ = (id) => document.getElementById(id);
   const cards = [$("card0"), $("card1")];
-  const chars = [$("char0"), $("char1")];
+  const canvases = [$("cv0"), $("cv1")];
   const names = [$("name0"), $("name1")];
-  const drawBtn = $("drawBtn"), resetBtn = $("resetBtn"), chipBox = $("chips");
+  const drawBtn = $("drawBtn"), resetBtn = $("resetBtn"), hotbar = $("hotbar");
   const optDup = $("optDup"), optSound = $("optSound");
+  const hintBtn = $("hintBtn"), book = $("book"), bookTitle = $("bookTitle"), bookList = $("bookList");
   const modeTwo = $("modeTwo"), modeOne = $("modeOne");
 
-  let mode = "two";              // "two" | "one"
-  let results = [null, null];    // 확정된 자음
-  let busy = false;              // 회전 중 잠금
+  let mode = "two";
+  let results = [null, null];
+  let busy = false;
   const history = [];
 
-  /* ---------- 효과음 (WebAudio) ---------- */
+  const SPLASHES = ["한글 최고!", "쌍자음은 없어요!", "크리퍼 조심!", "자음 14개 뽑기!",
+                    "다이아몬드 발견!", "세종대왕 님 감사합니다!", "블록처럼 조립하는 한글!"];
+  $("splash").textContent = SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
+
+  /* ---- 효과음 ---- */
   let ac = null;
   function audio() {
     if (!optSound.checked) return null;
@@ -254,31 +686,30 @@
     o.connect(g); g.connect(c.destination);
     o.start(); o.stop(c.currentTime + dur);
   }
-  const tick = () => beep(420 + Math.random() * 260, 0.04, "square", 0.035);
-  function fanfare() {
-    [[660, 0], [880, 110], [1180, 230]].forEach(([f, d]) =>
-      setTimeout(() => beep(f, 0.18, "triangle", 0.09), d));
+  const tick = () => beep(380 + Math.random() * 240, 0.035, "square", 0.03);
+  function levelUp() {   // 마크 레벨업 느낌
+    [[523, 0], [784, 90], [1046, 190]].forEach(([f, d]) =>
+      setTimeout(() => beep(f, 0.2, "triangle", 0.09), d));
   }
 
-  /* ---------- 반짝이 ---------- */
-  function sparkle(el) {
+  /* ---- 픽셀 파티클 ---- */
+  function burst(el) {
     const r = el.getBoundingClientRect();
-    const emojis = ["✨", "⭐", "🎉", "💫"];
-    for (let i = 0; i < 10; i++) {
+    const colors = ["#ffd83d", "#5ba528", "#ffffff", "#b8945f", "#7d7d7d"];
+    for (let i = 0; i < 14; i++) {
       const s = document.createElement("div");
-      s.className = "spark";
-      s.textContent = emojis[i % emojis.length];
+      s.className = "pix";
+      s.style.background = colors[i % colors.length];
       s.style.left = (r.left + r.width / 2) + "px";
       s.style.top = (r.top + r.height / 2) + "px";
-      const a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 110;
+      const a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 120;
       s.style.setProperty("--dx", Math.cos(a) * d + "px");
       s.style.setProperty("--dy", Math.sin(a) * d + "px");
       document.body.appendChild(s);
-      setTimeout(() => s.remove(), 950);
+      setTimeout(() => s.remove(), 900);
     }
   }
 
-  /* ---------- 뽑기 로직 ---------- */
   function pick(exclude) {
     let pool = CONSONANTS;
     if (exclude && !optDup.checked) {
@@ -288,85 +719,129 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  // 한 칸을 뱅글뱅글 돌리다가 target에서 멈춘다
+  // 뱅글뱅글 돌다가 점점 느려지며 target에서 멈춤
   function spin(index, target, duration) {
     return new Promise((resolve) => {
-      const card = cards[index], charEl = chars[index];
+      const card = cards[index], cv = canvases[index];
       card.classList.remove("landed");
       card.classList.add("spinning", "active");
-      charEl.classList.remove("empty");
-      names[index].textContent = "";
+      names[index].textContent = "???";
 
       const start = performance.now();
       let last = 0;
 
       function frame(now) {
         const t = Math.min((now - start) / duration, 1);
-        // 점점 느려지는 간격 (40ms → 260ms)
-        const gap = 40 + (260 - 40) * (t * t);
+        const gap = 40 + (260 - 40) * (t * t);   // 40ms → 260ms
         if (now - last >= gap) {
           last = now;
-          charEl.textContent = CONSONANTS[Math.floor(Math.random() * CONSONANTS.length)].ch;
+          drawGlyph(cv, CONSONANTS[Math.floor(Math.random() * CONSONANTS.length)].ch, "#ffffff");
           tick();
         }
         if (t < 1) { requestAnimationFrame(frame); return; }
 
         card.classList.remove("spinning");
-        charEl.textContent = target.ch;
+        drawGlyph(cv, target.ch, "#ffd83d");
         names[index].textContent = target.name;
-        void card.offsetWidth;            // 애니메이션 재시작
+        void card.offsetWidth;
         card.classList.add("landed");
-        sparkle(card);
-        fanfare();
-        setTimeout(() => card.classList.remove("active"), 600);
+        burst(card);
+        levelUp();
+        setTimeout(() => card.classList.remove("active"), 700);
         resolve();
       }
       requestAnimationFrame(frame);
     });
   }
 
+  function renderHotbar() {
+    hotbar.innerHTML = "";
+    const count = Math.max(history.length, 5);
+    for (let i = 0; i < count; i++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.backgroundImage = stoneTex;
+      const pair = history[i];
+      if (pair) {
+        if (i === 0) cell.classList.add("newest");
+        pair.forEach((ch) => {
+          const cv = document.createElement("canvas");
+          cv.width = cv.height = 10;
+          cell.appendChild(cv);
+          drawGlyph(cv, ch, "#ffffff");
+        });
+      }
+      hotbar.appendChild(cell);
+    }
+  }
+
   function addHistory() {
     if (!results[0] || !results[1]) return;
-    history.unshift(results[0].ch + " + " + results[1].ch);
-    if (history.length > 8) history.pop();
-    chipBox.innerHTML = "";
-    history.forEach((h) => {
-      const d = document.createElement("div");
-      d.className = "chip"; d.textContent = h;
-      chipBox.appendChild(d);
+    history.unshift([results[0].ch, results[1].ch]);
+    if (history.length > 5) history.pop();
+    renderHotbar();
+  }
+
+  function hideBook() {
+    book.hidden = true;
+    bookList.innerHTML = "";
+    hintBtn.textContent = "💡 예시 낱말 보기";
+  }
+
+  function showExamples() {
+    if (!results[0] || !results[1]) return;
+    const a = results[0].ch, b = results[1].ch;
+    const { list, total } = examplesFor(a, b, 3);
+
+    bookTitle.innerHTML = "<b>" + a + "</b> + <b>" + b + "</b> 가 모두 들어간 낱말" +
+      (total > list.length ? " (모두 " + total + "개 중 " + list.length + "개)" : "");
+    bookList.innerHTML = "";
+    if (!list.length) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="bm">딱 맞는 낱말이 없어요. 두 자음으로 그림을 그려 볼까요?</span>';
+      bookList.appendChild(li);
+    }
+    list.forEach((e) => {
+      const li = document.createElement("li");
+      const w = document.createElement("span"); w.className = "bw"; w.textContent = e.w;
+      const t = document.createElement("span"); t.className = "bt"; t.textContent = e.t;
+      const m = document.createElement("span"); m.className = "bm"; m.textContent = e.m;
+      li.append(w, t, m);
+      bookList.appendChild(li);
     });
+    book.hidden = false;
+    hintBtn.textContent = "🔄 다른 예시 보기";
+    beep(660, 0.1, "triangle", 0.06);
   }
 
   function updateButton() {
+    const ready = !!(results[0] && results[1]);
+    hintBtn.disabled = busy || !ready;
     if (busy) { drawBtn.disabled = true; return; }
     drawBtn.disabled = false;
     if (mode === "two") {
       drawBtn.textContent = results[0] ? "다시 뽑기!" : "자음 뽑기!";
-    } else {
-      if (!results[0]) drawBtn.textContent = "첫 번째 뽑기";
-      else if (!results[1]) drawBtn.textContent = "두 번째 뽑기";
-      else drawBtn.textContent = "다시 뽑기!";
-    }
+    } else if (!results[0]) drawBtn.textContent = "첫 번째 뽑기";
+    else if (!results[1]) drawBtn.textContent = "두 번째 뽑기";
+    else drawBtn.textContent = "다시 뽑기!";
   }
 
   function reset(silent) {
     results = [null, null];
     for (let i = 0; i < 2; i++) {
       cards[i].classList.remove("spinning", "landed", "active");
-      chars[i].textContent = "?";
-      chars[i].classList.add("empty");
-      names[i].textContent = "";
+      canvases[i].getContext("2d").clearRect(0, 0, 10, 10);
+      names[i].textContent = "???";
     }
+    hideBook();
     if (!silent) beep(300, 0.08, "sine", 0.05);
     updateButton();
   }
 
   async function draw() {
     if (busy) return;
-
-    // 이미 2개가 다 나왔으면 먼저 초기화
     if (results[0] && results[1]) reset(true);
-
+    hideBook();
     busy = true; updateButton();
 
     if (mode === "two") {
@@ -393,8 +868,8 @@
     reset(true);
   }
 
-  /* ---------- 이벤트 ---------- */
   drawBtn.addEventListener("click", draw);
+  hintBtn.addEventListener("click", showExamples);
   resetBtn.addEventListener("click", () => { if (!busy) reset(false); });
   modeTwo.addEventListener("click", () => setMode("two"));
   modeOne.addEventListener("click", () => setMode("one"));
@@ -402,12 +877,14 @@
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); draw(); }
     else if (e.key === "r" || e.key === "R") { if (!busy) reset(false); }
+    else if (e.key === "h" || e.key === "H") { if (!hintBtn.disabled) showExamples(); }
     else if (e.key === "f" || e.key === "F") {
       if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+      else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
     }
   });
 
+  renderHotbar();
   updateButton();
 })();
 </script>
