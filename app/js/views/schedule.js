@@ -5,7 +5,7 @@ import {
   weekStart, sundayStart, monthStart, monthEnd, range, parseYmd, isWeekend, ymd, occursOn,
 } from '../model.js';
 import { activitiesOn, recurringOn, afterSchoolFor, dayBundle, clashesOn, timetableOn } from '../select.js';
-import { clashLabel } from '../conflict.js';
+import { clashLabel, bellList, defaultBell, bellById, dayBellId, bellFor, describeTime } from '../conflict.js';
 import { openActivityForm } from '../ui/activityForm.js';
 import { openDayExport, openPeriodExport } from '../ui/exporter.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
@@ -41,7 +41,11 @@ export function activityCard(a, { compact = false, onChange, checkDate = '', sho
           onChange: () => toggleCheck(checkDate, a),
         }))
       : null,
-    h('div', { class: 'card-time' }, a.time || '—'),
+    h('div', { class: 'card-time' },
+      describeTime(a) || '—',
+      a.bellId && bellById(a.bellId)
+        ? h('span', { class: 'bell-tag' }, bellById(a.bellId).name)
+        : null),
     h('div', { class: 'card-main' },
       h('div', { class: 'card-title-row' },
         h('span', { class: 'card-title' }, a.title),
@@ -122,6 +126,39 @@ function bandNode(b, { compact = false, onClick } = {}) {
     h('span', { class: 'band-text' }, compact ? a.title : `${a.title}${a.target ? ` · ${a.target}` : ''}`),
     b.cutRight ? h('span', { class: 'band-arrow' }, '\u25B6') : null);
   return makeDraggable(node, a);
+}
+
+/**
+ * 그 날 어떤 시정으로 움직이는지 고른다.
+ * 1년에 몇 번 있는 일이라 기본은 건드리지 않고 그 날짜만 예외로 둔다.
+ */
+function dayBellPicker(day, onChange) {
+  const bells = bellList();
+  const def = defaultBell();
+  const cur = dayBellId(day);
+  if (bells.length < 2 && !cur) return null;      // 시정이 하나뿐이면 고를 것이 없다
+  if (!isAdmin()) {
+    return cur && bellById(cur)
+      ? h('span', { class: 'bell-tag big' }, bellById(cur).name)
+      : null;
+  }
+  const sel = h('select', {
+    class: `input date-pick bell-pick${cur ? ' is-set' : ''}`,
+    title: '이 날짜의 시정. 단축수업 날에 바꿔주세요.',
+    onChange: async (e) => {
+      const v = e.target.value;
+      if (v) await put('daybell', { id: day, bellId: v });
+      else {
+        const row = list('daybell').find((x) => x.id === day);
+        if (row) await remove('daybell', day);
+      }
+      toast(v ? `${fmtK(day, { year: false })} 는 '${bellById(v).name}' 으로 봅니다.` : '기본 시정으로 되돌렸습니다.', 'ok');
+      if (onChange) onChange();
+    },
+  },
+    h('option', { value: '' }, `${def.name} (기본)`),
+    ...bells.filter((b) => b.id !== def.id).map((b) => h('option', { value: b.id, selected: cur === b.id }, b.name)));
+  return sel;
 }
 
 /** 중복 목록에서 그 항목을 되찾는다. */
@@ -259,7 +296,9 @@ export function renderDaily(ctx) {
       label: fmtK(d),
       onPrev: () => ctx.setDate(addDays(d, -1)),
       onNext: () => ctx.setDate(addDays(d, 1)),
-      picker: h('input', { type: 'date', class: 'input date-pick', value: d, onChange: (e) => ctx.setDate(e.target.value) }),
+      picker: h('span', { class: 'row gap' },
+        h('input', { type: 'date', class: 'input date-pick', value: d, onChange: (e) => ctx.setDate(e.target.value) }),
+        dayBellPicker(d, rerender)),
       actions: [
         h('button', { class: 'btn btn-primary', onClick: () => openActivityForm(null, { defaultDate: d, onSaved: rerender }) }, '+ 일정 추가'),
         h('button', { class: 'btn', onClick: () => openDayExport(d) }, '결재문구·한글파일'),

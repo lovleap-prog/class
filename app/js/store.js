@@ -2,7 +2,12 @@
 // 화면 코드는 이 파일의 API만 사용한다.
 import { uid } from './model.js';
 
-export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks', 'staff', 'lessons', 'timetable'];
+export const COLLECTIONS = [
+  'activities', 'recurring', 'afterschool', 'audit', 'checks',
+  'staff', 'lessons', 'timetable',
+  'bells',    // 시정표 (기본 / 단축 / 수업공개 …)
+  'daybell',  // 날짜별로 어떤 시정을 쓰는지. 문서 id 가 날짜다.
+];
 
 let backend = null;
 let user = { name: '', role: 'teacher', dept: '', email: '' };

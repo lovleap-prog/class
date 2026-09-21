@@ -149,6 +149,19 @@ export function newSlot(partial = {}) {
   };
 }
 
+/** 시정표 하나 (기본 / 단축 / 수업공개 …) */
+export function newBell(partial = {}) {
+  return {
+    id: uid('bel'),
+    name: '',
+    periods: [],       // [['09:00','09:40'], …]
+    isDefault: false,
+    order: 0,
+    note: '',
+    ...partial,
+  };
+}
+
 let seq = 0;
 export function uid(prefix = 'id') {
   seq = (seq + 1) % 1000;

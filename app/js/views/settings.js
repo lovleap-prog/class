@@ -5,7 +5,7 @@ import { currentUser, setUser, exportAll, importAll, backendKind, list } from '.
 import { ROLE } from '../model.js';
 import { insertSample, removeSample, hasSample } from '../sampledata.js';
 import { staffBox } from './staffbox.js';
-import { DEFAULT_PERIODS } from '../conflict.js';
+import { bellsBox } from './bellsbox.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -60,21 +60,6 @@ export function renderSettings(ctx) {
   };
   ((cfg.links && cfg.links.length) ? cfg.links : [{ label: '', url: '' }]).forEach(addLinkRow);
 
-  // ── 교시 시각 (중복 판정의 기준) ──
-  const perRows = [];
-  const perBox = h('div', { class: 'period-rows' });
-  const drawPeriods = (rows) => {
-    clear(perBox); perRows.length = 0;
-    rows.forEach(([a, b], i) => {
-      const s1 = h('input', { class: 'input', type: 'time', value: a });
-      const s2 = h('input', { class: 'input', type: 'time', value: b });
-      perRows.push([s1, s2]);
-      perBox.appendChild(h('div', { class: 'period-row' },
-        h('span', { class: 'period-label' }, `${i + 1}교시`), s1, h('span', {}, '~'), s2));
-    });
-  };
-  drawPeriods(cfg.periods && cfg.periods.length ? cfg.periods : DEFAULT_PERIODS);
-
   // ── 한글 문서 ──
   const fontIn = h('input', { class: 'input', value: cfg.hwp.font });
   const sizeIn = h('input', { class: 'input', type: 'number', min: '8', max: '20', value: String(cfg.hwp.fontSize) });
@@ -128,13 +113,7 @@ export function renderSettings(ctx) {
         '여기서 넣은 값은 이 컴퓨터에만 저장됩니다. 모든 선생님에게 똑같이 보이게 하려면 ',
         h('code', {}, 'app/js/config.js'), ' 의 ', h('code', {}, 'links'), ' 를 고쳐 배포하세요.'))),
 
-    box('교시 시각', h('div', {},
-      h('p', { class: 'note' },
-        '중복(같은 시간) 판정의 기준입니다. ', h('strong', {}, "'3교시' 와 '10:30' 이 겹치는지"),
-        ' 를 이 표로 계산합니다. 학교 일과표에 맞춰 고쳐두세요.'),
-      perBox,
-      h('div', { class: 'row gap' },
-        h('button', { class: 'btn btn-sm', onClick: () => drawPeriods(DEFAULT_PERIODS) }, '기본값으로')))),
+    box('시정표 (기본 · 단축 · 수업공개)', bellsBox(ctx)),
 
     box('결재용 한글 문서', h('div', { class: 'form-grid' },
       field('글꼴', fontIn),
@@ -204,9 +183,7 @@ export function renderSettings(ctx) {
             .map((l) => ({ label: l.label || l.url.replace(/^https?:\/\//, '').slice(0, 24), url: l.url }));
           for (const k of fbFields) next.firebase[k] = fb[k].value.trim();
           next.hwp = { font: fontIn.value.trim() || '함초롬바탕', fontSize: Number(sizeIn.value) || 11 };
-          next.periods = perRows
-            .map(([a, b]) => [a.value, b.value])
-            .filter(([a, b]) => a && b);
+
           saveConfig(next);
           toast('저장했습니다.', 'ok');
           ctx.refresh();

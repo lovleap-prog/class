@@ -2,6 +2,7 @@
 import { h, openModal, toast } from '../lib/dom.js';
 import { CATEGORY, STATUS, newActivity, today } from '../model.js';
 import { put, audit, currentUser, isAdmin } from '../store.js';
+import { bellList, defaultBell, dayBellId, bellById } from '../conflict.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -26,6 +27,13 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
     ...Object.values(STATUS).map((s) =>
       h('option', { value: s.key, selected: a.status === s.key }, s.label)));
 
+  // 수업공개처럼 그 학년만 다른 시정으로 움직이는 활동을 위한 칸.
+  // 비워두면 그 날짜의 시정을 따른다.
+  const bells = bellList();
+  const bellSel = h('select', { class: 'input' },
+    h('option', { value: '' }, '그 날 시정 따름'),
+    ...bells.map((b) => h('option', { value: b.id, selected: a.bellId === b.id }, b.name)));
+
   const body = h('div', { class: 'form-grid' },
     field('날짜 *', mk('date', { type: 'date' })),
     field('종료일', mk('endDate', { type: 'date' }), '여러 날 이어지는 일정만'),
@@ -36,6 +44,10 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
     field('장소', mk('place', { placeholder: '예) 시청각실' })),
     field('담당', mk('owner', { placeholder: '예) 김민수' })),
     field('부서/계', mk('dept', { placeholder: '예) 교무기획부' })),
+    bells.length > 1
+      ? h('div', { class: 'span2' }, field('시정', bellSel,
+        '수업공개처럼 이 활동만 다른 시정으로 움직일 때 고르세요. 비워두면 그 날 시정을 따릅니다.'))
+      : null,
     h('div', { class: 'span2' }, field('세부 내용', detail)),
     isAdmin() ? h('div', { class: 'span2' }, field('처리 상태', statusSel, '관리자만 변경할 수 있습니다.')) : null,
   );
@@ -59,6 +71,7 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
           dept: val('dept') || (isNew ? me.dept : a.dept),
           category: catSel.value,
           detail: detail.value.trim(),
+          bellId: bellSel.value,
         });
 
         if (isNew) {

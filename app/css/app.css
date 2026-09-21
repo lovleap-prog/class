@@ -576,3 +576,23 @@ body.dragging-now .band-grid { pointer-events: none; }
 .tt-import-sum { margin-top: 12px; }
 .tt-import-preview { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .tt-import-preview .tt-chip { width: auto; align-items: center; gap: 5px; cursor: default; }
+
+/* ── 시정표 ─────────────────────────── */
+.bell-card {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 14px; margin-bottom: 10px; background: var(--panel-2);
+}
+.bell-card.is-default { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: var(--panel); }
+.bell-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.bell-name { flex: 1; font-weight: 700; padding: 5px 8px; }
+.bell-range { margin-bottom: 8px; }
+
+/* 시정 표시 */
+.bell-tag {
+  display: inline-block; margin-left: 4px; font-size: 10.5px; font-weight: 700;
+  color: var(--cat-event); background: color-mix(in srgb, var(--cat-event) 14%, transparent);
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+}
+.bell-tag.big { font-size: 12px; padding: 2px 9px; border-radius: 999px; margin-left: 0; }
+.bell-pick { width: auto; min-width: 130px; }
+.bell-pick.is-set { border-color: var(--cat-event); color: var(--cat-event); font-weight: 600; }

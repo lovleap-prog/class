@@ -1,12 +1,16 @@
 // 나이스 일일교육활동 결재용 문구 · 메신저 안내문 생성
 import { fmtK, byTime, WEEKDAY, parseYmd, CATEGORY } from '../model.js';
+import { describeTime, dayBellId, bellById, defaultBell } from '../conflict.js';
 
 const KO_ORDER = ['가', '나', '다', '라', '마', '바', '사', '아', '자', '차', '카', '타', '파', '하'];
 const koIdx = (i) => (i < KO_ORDER.length ? KO_ORDER[i] : `${KO_ORDER[i % 14]}${Math.floor(i / 14) + 1}`);
 
 /** 한 줄 요약: "1~2교시 3학년 안전교육(시청각실, 김민수)" */
 export function lineOf(a, { withTime = true } = {}) {
-  const head = withTime && a.time ? `${a.time} ` : '';
+  // 단축·수업공개 시정이면 '3교시 (10:30~11:10)' 처럼 실제 시각까지 적는다.
+  // 결재 문서를 보는 사람이 교시만 보고 시각을 잘못 짚으면 안 된다.
+  const shown = withTime ? describeTime(a) : '';
+  const head = shown ? `${shown} ` : '';
   const who = a.target ? `${a.target} ` : '';
   const meta = [a.place, a.owner].filter(Boolean).join(', ');
   const tail = meta ? `(${meta})` : '';
@@ -24,6 +28,8 @@ export function neisApprovalText(p) {
   const L = [];
 
   L.push(`${fmtK(date)} 일일교육활동 계획`);
+  const dayBell = bellById(dayBellId(date));
+  if (dayBell && dayBell.id !== defaultBell().id) L.push(`※ ${dayBell.name} 운영`);
   L.push('');
 
   let sec = 1;
@@ -66,6 +72,8 @@ export function messengerText(p) {
   const d = parseYmd(date);
   const L = [];
   L.push(`[일일교육활동 안내] ${d.getMonth() + 1}/${d.getDate()}(${WEEKDAY[d.getDay()]})`);
+  const mBell = bellById(dayBellId(date));
+  if (mBell && mBell.id !== defaultBell().id) L.push(`※ 오늘은 ${mBell.name} 입니다.`);
   L.push('');
   L.push('▷ 오늘의 교육활동');
   const sorted = activities.slice().sort(byTime);
