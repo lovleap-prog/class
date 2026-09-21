@@ -6,6 +6,8 @@ import { parseFreeText, parseTable, findMonthContext } from '../lib/textparse.js
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 import { putMany, audit, currentUser, isAdmin } from '../store.js';
+import { fillOwners, suggestOwner, matchSources, AUTO_FILL_FLOOR } from '../matcher.js';
+import { confCls, confLabel } from './staffbox.js';
 
 const FIELDS = [
   ['date', '날짜', 'date'],
@@ -48,9 +50,14 @@ export function renderImporter(ctx) {
   const setRows = (rows, source) => {
     st.rows = rows.map((r) => ({ ...r, _include: true }));
     st.source = source;
+    // 업무분장표와 과거 사례로 담당자를 채운다. 확신이 낮으면 제안만 남는다.
+    const { filled, hinted } = fillOwners(st.rows);
     drawPreview();
-    if (!rows.length) toast('읽어들일 일정을 찾지 못했습니다. 형식을 확인해 주세요.', 'warn');
-    else toast(`${rows.length}건을 읽었습니다. 내용을 확인한 뒤 등록하세요.`, 'ok');
+    if (!rows.length) { toast('읽어들일 일정을 찾지 못했습니다. 형식을 확인해 주세요.', 'warn'); return; }
+    const extra = filled || hinted
+      ? ` 담당자 ${filled}건 자동 입력${hinted ? `, ${hinted}건 제안` : ''}.`
+      : '';
+    toast(`${rows.length}건을 읽었습니다.${extra} 내용을 확인한 뒤 등록하세요.`, 'ok');
   };
 
   const handleFile = async (file) => {
@@ -122,6 +129,15 @@ export function renderImporter(ctx) {
 
     preview.appendChild(h('div', { class: 'submit-bar' },
       needDate && !asMode ? h('span', { class: 'warn-text' }, `날짜가 비어 있는 행이 ${needDate}건 있습니다.`) : null,
+      !asMode ? h('button', {
+        class: 'btn btn-sm',
+        title: '업무분장표와 과거 사례로 빈 담당자를 다시 채웁니다',
+        onClick: () => {
+          const { filled, hinted } = fillOwners(st.rows);
+          drawPreview();
+          toast(filled || hinted ? `담당자 ${filled}건 입력, ${hinted}건 제안` : '채울 만한 담당자를 찾지 못했습니다.', filled || hinted ? 'ok' : 'warn');
+        },
+      }, '담당자 다시 채우기') : null,
       isAdmin() ? h('label', { class: 'check' }, autoApprove, '등록과 동시에 승인') : null,
       h('button', {
         class: 'btn btn-primary',
@@ -235,11 +251,33 @@ function activityPreviewTable(rows) {
           h('input', {
             class: `cell ${!r[key] && key === 'date' ? 'cell-warn' : ''}`, type: type || 'text', value: r[key] || '',
             onChange: (e) => { r[key] = e.target.value.trim(); e.target.classList.toggle('cell-warn', key === 'date' && !r[key]); },
-          }))),
+          }),
+          key === 'owner' ? suggestChip(r) : null)),
         h('td', {}, h('select', {
           class: 'cell', onChange: (e) => { r.category = e.target.value; },
         }, ...Object.entries(CATEGORY).map(([k, v]) => h('option', { value: k, selected: r.category === k }, v)))),
         h('td', { class: 'raw' }, r._raw || ''))))));
+}
+
+/** 확신이 낮아 자동으로 넣지 않은 추천은 눌러서 넣을 수 있게 칩으로 보여준다. */
+function suggestChip(r) {
+  const hit = r._suggested;
+  if (!hit || !hit.owner) return null;
+  if (r.owner === hit.owner) {
+    return h('span', { class: `chip-sug ${confCls(hit.confidence)}`, title: hit.reason },
+      `자동 · ${confLabel(hit.confidence)}`);
+  }
+  if (r.owner) return null;
+  return h('button', {
+    class: 'chip-sug is-click', title: `${hit.reason}\n눌러서 넣기`,
+    onClick: (e) => {
+      r.owner = hit.owner;
+      if (hit.dept && !r.dept) r.dept = hit.dept;
+      const td = e.target.closest('td');
+      td.querySelector('input.cell').value = hit.owner;
+      e.target.replaceWith(h('span', { class: `chip-sug ${confCls(hit.confidence)}`, title: hit.reason }, `자동 · ${confLabel(hit.confidence)}`));
+    },
+  }, `제안: ${hit.owner}`);
 }
 
 function afterPreviewTable(rows) {

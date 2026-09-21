@@ -233,6 +233,10 @@ export function parseTable(rows, ctx = {}) {
     return [];
   }
 
+  // 업무분장표는 일정 표가 아니다(설정 탭에서 따로 읽는다).
+  const head0 = (rows[0] || []).map((c) => String(c || '').replace(/\s/g, '')).join('|');
+  if (/성명|담당자/.test(head0) && /분장|담당업무|업무내용/.test(head0)) return [];
+
   // 월중 교육활동계획 표(일 | 요일 | 주요 업무 내용 | 비고)는 규칙이 달라 따로 읽는다.
   const monthPlan = parseMonthPlan(rows, ctx);
   if (monthPlan) return monthPlan;

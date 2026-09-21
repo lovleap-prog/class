@@ -41,6 +41,12 @@ export function weekStart(s) {
   d.setDate(d.getDate() - off);
   return ymd(d);
 }
+/** 그 주의 일요일. 달력(월간)은 일요일부터 시작하는 게 학교 관행이다. */
+export function sundayStart(s) {
+  const d = parseYmd(s);
+  d.setDate(d.getDate() - d.getDay());
+  return ymd(d);
+}
 export function monthStart(s) { return s.slice(0, 8) + '01'; }
 export function monthEnd(s) {
   const d = parseYmd(s); return ymd(new Date(d.getFullYear(), d.getMonth() + 1, 0));
@@ -101,6 +107,28 @@ export function newAfterSchool(partial = {}) {
     name: '', teacher: '', grade: '', room: '',
     weekdays: [], time: '', term: '', capacity: '', enrolled: '', fee: '', note: '',
     active: true,
+    ...partial,
+  };
+}
+
+/** 업무분장표 한 줄 */
+export function newStaff(partial = {}) {
+  return {
+    id: uid('stf'),
+    name: '', dept: '', position: '',
+    keywords: [],        // 담당 업무 낱말. 이게 매칭의 핵심 근거가 된다.
+    active: true,
+    ...partial,
+  };
+}
+
+/** 과거 계획에서 배운 '활동명 → 담당자' 사례 */
+export function newLesson(partial = {}) {
+  return {
+    id: uid('lsn'),
+    title: '', owner: '', dept: '',
+    count: 1,
+    source: '',
     ...partial,
   };
 }

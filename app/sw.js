@@ -4,12 +4,12 @@ const CACHE = 'sam-v1';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/main.js', './js/config.js', './js/model.js', './js/store.js', './js/select.js', './js/sampledata.js', './js/checks.js',
+  './js/main.js', './js/config.js', './js/model.js', './js/store.js', './js/select.js', './js/sampledata.js', './js/checks.js', './js/matcher.js',
   './js/lib/dom.js', './js/lib/zip.js', './js/lib/hwpx-read.js', './js/lib/hwpx-write.js',
   './js/lib/xlsx-read.js', './js/lib/textparse.js', './js/lib/neis.js',
   './js/ui/activityForm.js', './js/ui/exporter.js',
   './js/views/schedule.js', './js/views/recurring.js', './js/views/afterschool.js',
-  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js',
+  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js', './js/views/staffbox.js',
   './icons/icon-192.png', './icons/icon-512.png',
 ];
 

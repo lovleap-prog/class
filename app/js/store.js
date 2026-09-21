@@ -2,7 +2,7 @@
 // 화면 코드는 이 파일의 API만 사용한다.
 import { uid } from './model.js';
 
-export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks'];
+export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks', 'staff', 'lessons'];
 
 let backend = null;
 let user = { name: '', role: 'teacher', dept: '', email: '' };
@@ -94,6 +94,12 @@ function slim(o) {
 
 /** 백업 대상. 개인 체크(checks)는 사람마다 다른 값이라 백업에 넣지 않는다. */
 export const BACKUP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'checks');
+
+/** 업무분장표를 통째로 갈아끼운다. */
+export async function replaceAllStaff(docs) {
+  await backend.replace('staff', docs);
+  emit('staff');
+}
 
 export function exportAll() {
   const data = {};

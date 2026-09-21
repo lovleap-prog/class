@@ -4,6 +4,7 @@ import { loadConfig, saveConfig, resetConfig } from '../config.js';
 import { currentUser, setUser, exportAll, importAll, backendKind, list } from '../store.js';
 import { ROLE } from '../model.js';
 import { insertSample, removeSample, hasSample } from '../sampledata.js';
+import { staffBox } from './staffbox.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -96,6 +97,8 @@ export function renderSettings(ctx) {
         ' — ', counts),
       fbBox,
       h('p', { class: 'muted small' }, '저장 위치를 바꾸면 새로 고침해야 적용됩니다. 설정 방법은 docs/SETUP-firebase.md 를 보세요.'))),
+
+    box('담당자 자동 매칭 (업무분장표 · 과거 계획 학습)', staffBox(ctx)),
 
     box('바로가기 링크', h('div', {},
       h('p', { class: 'note' },

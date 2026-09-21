@@ -372,3 +372,62 @@ body.widget { background: var(--panel); }
   padding: 0; margin: -1px; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap; border: 0;
 }
+
+/* ── 기간 일정 띠 ───────────────────── */
+.band {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  font-size: 11.5px; font-weight: 600; line-height: 1.3;
+  padding: 3px 8px; border-radius: 5px; border: none; cursor: default;
+  background: color-mix(in srgb, var(--cat-etc) 20%, var(--panel));
+  color: var(--cat-etc);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-etc) 30%, transparent);
+}
+button.band { cursor: pointer; text-align: left; }
+button.band:hover { filter: brightness(.96); box-shadow: inset 0 0 0 1.5px currentColor; }
+.band.cat-academic { background: color-mix(in srgb, var(--cat-academic) 18%, var(--panel)); color: var(--cat-academic); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-academic) 32%, transparent); }
+.band.cat-event    { background: color-mix(in srgb, var(--cat-event) 18%, var(--panel));    color: var(--cat-event);    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-event) 32%, transparent); }
+.band.cat-safety   { background: color-mix(in srgb, var(--cat-safety) 18%, var(--panel));   color: var(--cat-safety);   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-safety) 32%, transparent); }
+.band.cat-meeting  { background: color-mix(in srgb, var(--cat-meeting) 18%, var(--panel));  color: var(--cat-meeting);  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-meeting) 32%, transparent); }
+.band.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.band.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.band-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.band-arrow { font-size: 8px; opacity: .7; flex: 0 0 auto; }
+.band-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px 8px; }
+
+/* 일일 화면의 기간 일정 */
+.sec-span { border-left: 3px solid var(--cat-event); }
+.band-day { padding: 8px 12px; font-size: 13.5px; margin-bottom: 6px; flex-wrap: wrap; }
+.band-day:last-child { margin-bottom: 0; }
+.band-day .band-text { font-size: 14.5px; white-space: normal; }
+.band-meta { font-size: 11.5px; font-weight: 500; opacity: .85; }
+
+/* 주간 띠 */
+.week-bandwrap {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 9px 12px; box-shadow: var(--shadow);
+}
+.week-bandwrap .band-grid { gap: 4px 8px; }
+.band-label { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+
+/* 월간 띠 — 요일 칸 위에 겹쳐 그린다 */
+.month-dows { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 2px; }
+.month-week { position: relative; margin-bottom: 4px; }
+.month-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.month-bandspace { height: calc(var(--bands, 0) * 19px); flex: 0 0 auto; }
+.month-week > .band-grid {
+  position: absolute; left: 0; right: 0; top: 22px;
+  gap: 3px 4px; pointer-events: none; z-index: 2;
+}
+.month-week > .band-grid .band { pointer-events: auto; font-size: 10.5px; padding: 2px 6px; }
+
+/* ── 담당자 자동 매칭 ───────────────── */
+.chip-sug {
+  display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700;
+  border-radius: 5px; padding: 1px 6px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--muted); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip-sug.is-click { cursor: pointer; border-style: dashed; border-color: var(--brand); color: var(--brand); }
+.chip-sug.is-click:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.sep { border: none; border-top: 1px solid var(--line); margin: 16px 0 12px; }
+.sec-head h4 { font-size: 13.5px; }
