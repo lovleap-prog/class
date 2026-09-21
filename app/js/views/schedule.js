@@ -274,7 +274,7 @@ export function renderWeekly(ctx) {
             ? h('div', { class: 'mini-after' }, `방과후 ${b.afterSchool.length}강좌`)
             : null,
           !b.activities.length && !b.recurring.length ? h('div', { class: 'empty sm' }, '—') : null));
-      return makeDropTarget(col, day, rerender);
+      return makeDropTarget(col, day);
     })));
 }
 
@@ -337,7 +337,7 @@ export function renderMonthly(ctx) {
             }, a.title), a)),
             acts.length > 3 ? h('span', { class: 'month-more' }, `+${acts.length - 3}`) : null,
             rec.length ? h('span', { class: 'month-rec' }, `상시 ${rec.length}`) : null);
-          return makeDropTarget(cell, day, () => ctx.refresh());
+          return makeDropTarget(cell, day);
         })),
         bandGrid(bands, { compact: true, onClick: (a) => goDay(a.date) }));
     }));
