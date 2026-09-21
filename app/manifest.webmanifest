@@ -1,0 +1,22 @@
+{
+  "name": "학교 교육활동 관리",
+  "short_name": "교육활동",
+  "description": "일일·주간·월간 교육활동 입력 → 확인 대기 → 승인, 나이스 결재 문구와 한글 문서 내보내기",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1f5eff",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "shortcuts": [
+    { "name": "오늘 일일교육활동", "url": "./index.html#/daily" },
+    { "name": "승인함", "url": "./index.html#/approvals" },
+    { "name": "작은 창(위젯)", "url": "./index.html?mode=widget" }
+  ]
+}
