@@ -41,6 +41,23 @@ export function renderSettings(ctx) {
   backendSel.addEventListener('change', syncFb);
   setTimeout(syncFb, 0);
 
+  // ── 바로가기 링크 (학교 노션 자료실 등) ──
+  const linkRows = [];
+  const linkBox = h('div', { class: 'link-rows' });
+  const addLinkRow = (link = { label: '', url: '' }) => {
+    const label = h('input', { class: 'input', value: link.label || '', placeholder: '예) 학교 자료실(노션)' });
+    const url = h('input', { class: 'input', value: link.url || '', placeholder: 'https://www.notion.so/...' });
+    const row = h('div', { class: 'link-row' }, label, url,
+      h('button', {
+        class: 'icon-btn danger', title: '이 줄 삭제',
+        onClick: () => { row.remove(); const i = linkRows.indexOf(entry); if (i >= 0) linkRows.splice(i, 1); },
+      }, '\u2715'));
+    const entry = { label, url };
+    linkRows.push(entry);
+    linkBox.appendChild(row);
+  };
+  ((cfg.links && cfg.links.length) ? cfg.links : [{ label: '', url: '' }]).forEach(addLinkRow);
+
   // ── 한글 문서 ──
   const fontIn = h('input', { class: 'input', value: cfg.hwp.font });
   const sizeIn = h('input', { class: 'input', type: 'number', min: '8', max: '20', value: String(cfg.hwp.fontSize) });
@@ -79,6 +96,18 @@ export function renderSettings(ctx) {
         ' — ', counts),
       fbBox,
       h('p', { class: 'muted small' }, '저장 위치를 바꾸면 새로 고침해야 적용됩니다. 설정 방법은 docs/SETUP-firebase.md 를 보세요.'))),
+
+    box('바로가기 링크', h('div', {},
+      h('p', { class: 'note' },
+        '머리말 오른쪽에 버튼으로 걸립니다. 학교 노션 자료실, 업무포털 주소 등을 넣으세요. ',
+        '새 창에서 열리며, ', h('strong', {}, '접근 권한이 없는 분은 그쪽에서 막히므로'),
+        ' 링크가 보이는 것 자체는 문제되지 않습니다.'),
+      linkBox,
+      h('div', { class: 'row gap' },
+        h('button', { class: 'btn btn-sm', onClick: () => addLinkRow() }, '+ 줄 추가')),
+      h('p', { class: 'muted small' },
+        '여기서 넣은 값은 이 컴퓨터에만 저장됩니다. 모든 선생님에게 똑같이 보이게 하려면 ',
+        h('code', {}, 'app/js/config.js'), ' 의 ', h('code', {}, 'links'), ' 를 고쳐 배포하세요.'))),
 
     box('결재용 한글 문서', h('div', { class: 'form-grid' },
       field('글꼴', fontIn),
@@ -142,6 +171,10 @@ export function renderSettings(ctx) {
           next.backend = backendSel.value;
           next.schoolId = fb.schoolId.value.trim() || 'default';
           next.googleHostedDomain = fb.hd.value.trim();
+          next.links = linkRows
+            .map((r) => ({ label: r.label.value.trim(), url: r.url.value.trim() }))
+            .filter((l) => l.url)
+            .map((l) => ({ label: l.label || l.url.replace(/^https?:\/\//, '').slice(0, 24), url: l.url }));
           for (const k of fbFields) next.firebase[k] = fb[k].value.trim();
           next.hwp = { font: fontIn.value.trim() || '함초롬바탕', fontSize: Number(sizeIn.value) || 11 };
           saveConfig(next);

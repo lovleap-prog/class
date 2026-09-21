@@ -92,6 +92,12 @@ service cloud.firestore {
       allow write: if isAdmin(school);
     }
 
+    // 개인 확인 체크 — 문서 id 가 그 사람의 uid 다. 남의 체크는 고칠 수 없다.
+    match /schools/{school}/checks/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
     // 이력은 남기기만 하고 고치지 못하게
     match /schools/{school}/audit/{id} {
       allow read: if signedIn();
@@ -148,6 +154,20 @@ const DEFAULTS = {
   (public 폴더를 `app` 으로 지정)
 
 **반드시 `https://` 주소여야 합니다.** 그래야 설치(PWA)와 구글 로그인이 됩니다.
+
+## 개인 확인 체크에 대해
+
+일일교육활동의 체크박스는 일정 문서를 건드리지 않고 `checks` 컬렉션에 사람별로 따로 저장합니다.
+그래서 **내가 체크해도 다른 선생님 화면은 그대로**이고, 같은 사람이 컴퓨터와 휴대전화에서 봐도
+체크는 따라갑니다.
+
+한 가지 짚어둘 점이 있습니다. 위 규칙에서 `checks` 의 **읽기는 로그인한 사람 모두에게 열려** 있습니다.
+앱이 컬렉션 전체를 구독하는 구조라 그렇습니다(파이어스토어는 권한 없는 문서가 섞일 수 있는
+질의를 통째로 거부합니다). **쓰기는 본인 문서만** 가능하고 화면에도 남의 체크는 나오지 않지만,
+개발자 도구를 쓸 줄 아는 사람은 남의 체크 목록을 들여다볼 수는 있습니다.
+
+"누가 무엇을 아직 안 했는지"가 민감하게 느껴진다면, 컬렉션 전체 구독 대신 본인 문서 하나만
+구독하도록 바꾸고 규칙도 `allow read: if request.auth.uid == uid` 로 좁히면 됩니다.
 
 ## 점검
 

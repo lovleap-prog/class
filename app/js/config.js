@@ -18,6 +18,11 @@ const DEFAULTS = {
     messagingSenderId: '',
     appId: '',
   },
+  // 머리말에 띄울 바로가기 링크. 학교 노션 자료실, 업무포털 등.
+  // 모든 선생님에게 똑같이 보이게 하려면 [설정] 탭이 아니라 이 파일을 고쳐 배포한다.
+  // (설정 탭에서 넣은 값은 그 컴퓨터에만 남는다)
+  // 예: [{ label: '학교 자료실(노션)', url: 'https://www.notion.so/...' }]
+  links: [],
   // 학교 구글 계정만 로그인시키려면 도메인을 적는다. 예: 'goe.go.kr'
   googleHostedDomain: '',
   hwp: { font: '함초롬바탕', fontSize: 11 },

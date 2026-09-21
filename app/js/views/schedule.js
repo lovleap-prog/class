@@ -8,6 +8,7 @@ import { activitiesOn, recurringOn, afterSchoolFor, dayBundle } from '../select.
 import { openActivityForm } from '../ui/activityForm.js';
 import { openDayExport, openPeriodExport } from '../ui/exporter.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
+import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
 
 // ── 공통 조각 ───────────────────────────────────────────────
 export function statusBadge(a) {
@@ -15,11 +16,23 @@ export function statusBadge(a) {
   return s ? h('span', { class: `badge ${s.cls}` }, s.label) : null;
 }
 
-export function activityCard(a, { compact = false, onChange } = {}) {
+/**
+ * @param checkDate  이 날짜 기준으로 내 체크 상태를 반영한다(빈 값이면 체크 개념 없음)
+ * @param showCheck  체크박스를 그릴지. 주간 화면은 상태만 반영하고 체크박스는 안 그린다.
+ */
+export function activityCard(a, { compact = false, onChange, checkDate = '', showCheck = false } = {}) {
   const chips = [a.target, a.place, a.owner, a.dept].filter(Boolean);
   const canEdit = isAdmin() || a.createdBy === currentUser().name;
+  const done = isChecked(checkDate, a);
 
-  return h('div', { class: `card cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}` },
+  return h('div', { class: `card cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}${done ? ' is-done' : ''}${showCheck ? ' has-check' : ''}` },
+    showCheck
+      ? h('label', { class: 'card-check', title: done ? '확인 표시 해제' : '확인했으면 체크하세요 (나에게만 보입니다)' },
+        h('input', {
+          type: 'checkbox', checked: done,
+          onChange: () => toggleCheck(checkDate, a),
+        }))
+      : null,
     h('div', { class: 'card-time' }, a.time || '—'),
     h('div', { class: 'card-main' },
       h('div', { class: 'card-title-row' },
@@ -47,6 +60,22 @@ export function activityCard(a, { compact = false, onChange } = {}) {
 }
 
 function emptyBox(msg) { return h('div', { class: 'empty' }, msg); }
+
+/** '확인 2/5' 와 초기화 버튼. 체크는 사람마다 따로라 안내 문구를 함께 둔다. */
+function progressNode(date, items, rerender) {
+  if (!items.length) return null;
+  const done = countChecked(date, items);
+  return h('div', { class: 'row gap' },
+    h('span', { class: `progress${done === items.length ? ' all-done' : ''}` },
+      done === items.length ? `확인 완료 ${done}/${items.length}` : `확인 ${done}/${items.length}`),
+    h('span', { class: 'muted small' }, '체크는 나에게만 보입니다'),
+    done
+      ? h('button', {
+        class: 'btn btn-sm',
+        onClick: async () => { await clearChecks(date); rerender(); },
+      }, '내 체크 지우기')
+      : null);
+}
 
 function section(title, nodes, extra) {
   return h('section', { class: 'sec' },
@@ -93,12 +122,13 @@ export function renderDaily(ctx) {
     }),
 
     pending.length
-      ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender })),
+      ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d })),
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
       : null,
 
-    section('교육활동', approved.map((a) => activityCard(a, { onChange: rerender }))),
-    section('상시·반복 운영', rec.map((a) => activityCard(a, { compact: true })),
+    section('교육활동', approved.map((a) => activityCard(a, { onChange: rerender, checkDate: d, showCheck: true })),
+      progressNode(d, [...approved, ...rec], rerender)),
+    section('상시·반복 운영', rec.map((a) => activityCard(a, { compact: true, checkDate: d, showCheck: true })),
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('recurring') }, '반복일정 관리')),
     section('방과후학교', [afterSchoolTableNode(after)],
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리')),
@@ -135,8 +165,8 @@ export function renderWeekly(ctx) {
           h('span', { class: 'week-date' }, parseYmd(day).getDate()),
           pend ? h('span', { class: 'dot-pending', title: `확인 대기 ${pend}건` }, pend) : null),
         h('div', { class: 'week-body' },
-          ...b.activities.map((a) => activityCard(a, { compact: true, onChange: rerender })),
-          ...b.recurring.map((a) => activityCard(a, { compact: true })),
+          ...b.activities.map((a) => activityCard(a, { compact: true, onChange: rerender, checkDate: day })),
+          ...b.recurring.map((a) => activityCard(a, { compact: true, checkDate: day })),
           b.afterSchool.length
             ? h('div', { class: 'mini-after' }, `방과후 ${b.afterSchool.length}강좌`)
             : null,

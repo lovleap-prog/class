@@ -321,3 +321,46 @@ body.widget { background: var(--panel); }
 .boot-help code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .boot-help pre { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 13px; overflow-x: auto; }
 .boot-help .boot-note { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+/* ── 바로가기 링크 (노션 자료실 등) ── */
+.link-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; text-decoration: none; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; white-space: nowrap;
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+}
+.link-btn:hover { border-color: var(--brand); color: var(--brand); }
+.link-ico { font-size: 11px; opacity: .8; }
+.link-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.link-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 8px; align-items: center; }
+.widget-foot .link-btn { flex: 1; justify-content: center; padding: 5px 10px; }
+
+/* ── 개인 확인 체크 ── */
+.card.has-check { grid-template-columns: 24px 78px 1fr auto; }
+.card-check { display: flex; align-items: flex-start; padding-top: 2px; cursor: pointer; }
+.card-check input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--brand); margin: 0; }
+.card.is-done { opacity: .58; background: var(--panel-2); }
+.card.is-done .card-title,
+.card.is-done .card-time { text-decoration: line-through; text-decoration-thickness: 2px; }
+.card.is-done .chips { opacity: .8; }
+.progress {
+  font-size: 12.5px; font-weight: 700; color: var(--muted);
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px 10px;
+}
+.progress.all-done {
+  color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--line));
+}
+.widget-list li.is-done { opacity: .55; }
+.widget-list li.is-done .w-title,
+.widget-list li.is-done .w-time { text-decoration: line-through; text-decoration-thickness: 2px; }
+.w-check { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--brand); flex: 0 0 auto; }
+
+@media (max-width: 640px) {
+  .card.has-check { grid-template-columns: 24px 62px 1fr auto; }
+  .link-row { grid-template-columns: 1fr auto; }
+  .link-row .input:nth-child(2) { grid-column: 1 / -1; }
+  .link-btn { max-width: 140px; }
+}

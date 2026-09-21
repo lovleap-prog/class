@@ -10,6 +10,7 @@ import { renderApprovals } from './views/approvals.js';
 import { renderImporter } from './views/importer.js';
 import { renderSettings } from './views/settings.js';
 import { countPendingInRange, dayBundle } from './select.js';
+import { isChecked, toggleCheck } from './checks.js';
 import { openDayExport } from './ui/exporter.js';
 import { ROLE } from './model.js';
 
@@ -114,6 +115,7 @@ function header() {
         h('strong', {}, cfg.school.name || '학교 교육활동'),
         h('span', { class: 'sub' }, '일일 · 주간 · 월간 교육활동'))),
     h('div', { class: 'top-right' },
+      ...linkButtons(cfg),
       h('span', { class: `conn ${backendKind()}` },
         backendKind() === 'firestore' ? '실시간 공유' : '이 컴퓨터 저장'),
       h('button', {
@@ -130,6 +132,23 @@ function header() {
         onClick: () => ctx.go(key),
       }, label,
         key === 'approvals' && pend ? h('span', { class: 'tab-badge' }, pend) : null))));
+}
+
+/**
+ * 학교 자료실(노션) 같은 바로가기.
+ * 접근 권한이 없는 분에게도 그냥 보여준다 — 눌러도 그쪽에서 막히기 때문에
+ * 굳이 숨길 이유가 없고, 권한 있는 분이 찾기 쉬운 편이 낫다.
+ */
+function linkButtons(cfg) {
+  return (cfg.links || [])
+    .filter((l) => l && l.url)
+    .map((l) => h('a', {
+      class: 'link-btn',
+      href: l.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: `${l.url}\n새 창에서 열립니다. 접근 권한이 있는 계정만 볼 수 있습니다.`,
+    }, h('span', { class: 'link-ico' }, '\u{1F517}'), l.label || '바로가기'));
 }
 
 function openWidget() {
@@ -150,11 +169,19 @@ function renderWidget() {
       h('button', { class: 'btn btn-sm', onClick: () => ctx.setDate(today()) }, '오늘')),
     h('div', { class: 'widget-body' },
       items.length
-        ? h('ul', { class: 'widget-list' }, ...items.map((a) => h('li', {},
-          h('span', { class: 'w-time' }, a.time || '—'),
-          h('span', { class: 'w-title' }, a.title),
-          a.isRecurring ? h('span', { class: 'badge st-rec' }, '상시') : null,
-          a.place ? h('span', { class: 'w-place' }, a.place) : null)))
+        ? h('ul', { class: 'widget-list' }, ...items.map((a) => {
+          const done = isChecked(state.date, a);
+          return h('li', { class: done ? 'is-done' : '' },
+            h('input', {
+              type: 'checkbox', class: 'w-check', checked: done,
+              title: '확인했으면 체크하세요 (나에게만 보입니다)',
+              onChange: () => toggleCheck(state.date, a),
+            }),
+            h('span', { class: 'w-time' }, a.time || '—'),
+            h('span', { class: 'w-title' }, a.title),
+            a.isRecurring ? h('span', { class: 'badge st-rec' }, '상시') : null,
+            a.place ? h('span', { class: 'w-place' }, a.place) : null);
+        }))
         : h('div', { class: 'empty' }, '승인된 일정이 없습니다.'),
       b.afterSchool.length
         ? h('div', { class: 'widget-after' },
@@ -162,6 +189,7 @@ function renderWidget() {
           h('ul', {}, ...b.afterSchool.map((p) => h('li', {}, `${p.time || ''} ${p.name}${p.room ? ` (${p.room})` : ''}`))))
         : null),
     h('div', { class: 'widget-foot' },
+      ...linkButtons(cfg).slice(0, 1),
       h('button', { class: 'btn btn-sm', onClick: () => openDayExport(state.date) }, '결재문구'),
       h('button', {
         class: 'btn btn-sm',

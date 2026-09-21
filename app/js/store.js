@@ -2,7 +2,7 @@
 // 화면 코드는 이 파일의 API만 사용한다.
 import { uid } from './model.js';
 
-export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit'];
+export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks'];
 
 let backend = null;
 let user = { name: '', role: 'teacher', dept: '', email: '' };
@@ -92,15 +92,18 @@ function slim(o) {
   return rest;
 }
 
+/** 백업 대상. 개인 체크(checks)는 사람마다 다른 값이라 백업에 넣지 않는다. */
+export const BACKUP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'checks');
+
 export function exportAll() {
   const data = {};
-  for (const c of COLLECTIONS) data[c] = list(c);
+  for (const c of BACKUP_COLLECTIONS) data[c] = list(c);
   return { exportedAt: new Date().toISOString(), version: 1, data };
 }
 
 export async function importAll(payload, { replace = false } = {}) {
   const data = payload && payload.data ? payload.data : payload;
-  for (const c of COLLECTIONS) {
+  for (const c of BACKUP_COLLECTIONS) {
     if (!Array.isArray(data[c])) continue;
     if (replace) await backend.replace(c, data[c]);
     else await backend.putMany(c, data[c]);
