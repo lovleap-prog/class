@@ -138,12 +138,15 @@ function cellNode(wk, d, p, slots, clash, admin, refresh) {
         class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}`,
         title: hits
           ? `${s.title} — 중복: ${hits.map((x) => `${x.other.title}(${x.why.join(', ')})`).join(' / ')}`
-          : [s.title, s.target, s.place, s.owner].filter(Boolean).join(' · '),
+          : [s.title, s.target, s.place, s.owner, s.note].filter(Boolean).join(' · '),
         onClick: (e) => { e.stopPropagation(); if (admin) openSlotForm(s, null, refresh); },
       },
-        hits ? h('span', { class: 'clash-mark' }, '⚠') : null,
-        h('span', { class: 'tt-chip-title' }, s.title),
-        s.place ? h('span', { class: 'tt-chip-sub' }, s.place) : null);
+        h('span', { class: 'tt-chip-main' },
+          hits ? h('span', { class: 'clash-mark' }, '⚠') : null,
+          h('span', { class: 'tt-chip-title' }, s.title),
+          s.place ? h('span', { class: 'tt-chip-sub' }, s.place) : null),
+        // 비고는 오른쪽 여백에. 칸이 좁으면 줄여 보이고 전체는 도움말로 뜬다.
+        s.note ? h('span', { class: 'tt-chip-note', title: s.note }, s.note) : null);
       // 시간표 칸도 끌어서 옮긴다. 옮기는 방법은 여기서 알려준다.
       if (admin) {
         makeDraggable(chip, {

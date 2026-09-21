@@ -164,11 +164,12 @@ function timetableStrip(slots, clash) {
     const hits = clash.get(`tt_${s.id}`);
     return h('span', {
       class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}`,
-      title: hits ? clashLabel(hits) : [s.target, s.place, s.owner].filter(Boolean).join(' · '),
+      title: hits ? clashLabel(hits) : [s.target, s.place, s.owner, s.note].filter(Boolean).join(' · '),
     },
       h('span', { class: 'tt-chip-sub' }, `${s.period}교시`),
       hits ? h('span', { class: 'clash-mark' }, '\u26A0') : null,
-      h('span', { class: 'tt-chip-title' }, s.title));
+      h('span', { class: 'tt-chip-title' }, s.title),
+      s.note ? h('span', { class: 'tt-chip-note' }, s.note) : null);
   }));
 }
 
