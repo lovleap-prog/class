@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>한글날 자음 뽑기</title>
+<style>
+  :root{
+    --bg:#1d2b1f;
+    --bg2:#2b3d2c;
+    --panel:#3a2a1c;
+    --panel-light:#5b4127;
+    --grass:#5fa832;
+    --grass-dark:#3c7420;
+    --gold:#ffd93b;
+    --ink:#f6f2e7;
+    --ink-dim:#c9c0ab;
+    --shadow:#0c130d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+    background:
+      radial-gradient(circle at 50% 0%, #34492f 0%, var(--bg) 55%, #121a13 100%);
+    color:var(--ink);
+    min-height:100%;
+    display:flex;flex-direction:column;align-items:center;
+    padding:18px 16px 40px;
+    overflow-x:hidden;
+  }
+
+  /* ---------- 헤더 ---------- */
+  header{text-align:center;margin-bottom:14px}
+  h1{
+    font-size:clamp(26px,5vw,46px);
+    letter-spacing:2px;
+    text-shadow:0 4px 0 var(--grass-dark), 0 8px 12px var(--shadow);
+  }
+  h1 .em{color:var(--gold)}
+  .mission{
+    margin-top:8px;font-size:clamp(13px,2.4vw,18px);color:var(--ink-dim);
+  }
+
+  /* ---------- 모드 선택 ---------- */
+  .modes{display:flex;gap:10px;margin:16px 0 6px;flex-wrap:wrap;justify-content:center}
+  .mode-btn{
+    font:inherit;font-size:clamp(14px,2.2vw,18px);font-weight:700;
+    padding:12px 20px;cursor:pointer;color:var(--ink);
+    background:var(--panel);
+    border:4px solid var(--panel-light);
+    border-radius:4px;
+    box-shadow:0 5px 0 #20160e;
+    transition:transform .08s, background .15s;
+  }
+  .mode-btn:hover{background:var(--panel-light)}
+  .mode-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #20160e}
+  .mode-btn[aria-pressed="true"]{
+    background:var(--grass);border-color:#7bc94a;color:#10230a;
+    box-shadow:0 5px 0 var(--grass-dark);
+  }
+
+  /* ---------- 슬롯 ---------- */
+  .stage{
+    display:flex;gap:clamp(14px,4vw,40px);
+    margin:26px 0 8px;perspective:900px;flex-wrap:wrap;justify-content:center;
+  }
+  .slot{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .slot-label{
+    font-size:clamp(12px,2vw,16px);font-weight:700;color:var(--ink-dim);
+    letter-spacing:1px;
+  }
+  .card{
+    width:clamp(130px,30vw,220px);
+    height:clamp(150px,34vw,250px);
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,#fffdf4,#e9e0c8);
+    border:6px solid #8b6b3d;
+    border-radius:10px;
+    box-shadow:0 10px 0 #5a4325, 0 18px 28px rgba(0,0,0,.45);
+    transform-style:preserve-3d;
+    position:relative;
+  }
+  .card.active{border-color:var(--gold);box-shadow:0 10px 0 #b8901c, 0 0 28px rgba(255,217,59,.5)}
+  .char{
+    font-size:clamp(72px,18vw,150px);
+    font-weight:800;color:#23301f;line-height:1;
+    user-select:none;
+  }
+  .char.empty{color:#bfb59a}
+  .name{
+    font-size:clamp(14px,2.6vw,22px);font-weight:700;color:var(--gold);
+    min-height:1.4em;letter-spacing:2px;
+  }
+
+  /* 뱅글뱅글 회전 */
+  .card.spinning{animation:spin3d .42s linear infinite}
+  @keyframes spin3d{
+    0%{transform:rotateY(0deg) scale(1)}
+    50%{transform:rotateY(180deg) scale(1.06)}
+    100%{transform:rotateY(360deg) scale(1)}
+  }
+  .card.landed{animation:land .55s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes land{
+    0%{transform:scale(1.28) rotate(-8deg)}
+    55%{transform:scale(.94) rotate(4deg)}
+    100%{transform:scale(1) rotate(0)}
+  }
+  .card.landed::after{
+    content:"";position:absolute;inset:-14px;border-radius:14px;
+    border:5px solid var(--gold);opacity:0;
+    animation:ring .6s ease-out;
+  }
+  @keyframes ring{0%{opacity:.9;transform:scale(.85)}100%{opacity:0;transform:scale(1.25)}}
+
+  /* ---------- 조작 버튼 ---------- */
+  .controls{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;justify-content:center}
+  .btn{
+    font:inherit;font-weight:800;cursor:pointer;color:#10230a;
+    background:var(--grass);
+    border:5px solid #7bc94a;border-radius:6px;
+    padding:16px 34px;font-size:clamp(17px,3vw,26px);
+    box-shadow:0 7px 0 var(--grass-dark);
+    transition:transform .08s,filter .15s;
+  }
+  .btn:hover{filter:brightness(1.08)}
+  .btn:active{transform:translateY(4px);box-shadow:0 3px 0 var(--grass-dark)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+  .btn.ghost{
+    background:var(--panel);color:var(--ink);border-color:var(--panel-light);
+    box-shadow:0 7px 0 #20160e;padding:16px 24px;
+  }
+
+  /* ---------- 옵션 ---------- */
+  .options{display:flex;gap:18px;margin-top:22px;flex-wrap:wrap;justify-content:center;
+    font-size:clamp(12px,2vw,15px);color:var(--ink-dim)}
+  .options label{display:flex;align-items:center;gap:7px;cursor:pointer}
+  .options input{width:18px;height:18px;accent-color:var(--grass);cursor:pointer}
+
+  /* ---------- 기록 ---------- */
+  .history{margin-top:26px;width:min(760px,100%);text-align:center}
+  .history h2{font-size:14px;color:var(--ink-dim);letter-spacing:2px;margin-bottom:10px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:42px}
+  .chip{
+    background:var(--panel);border:3px solid var(--panel-light);border-radius:4px;
+    padding:6px 12px;font-size:clamp(15px,2.4vw,20px);font-weight:700;letter-spacing:3px;
+  }
+  .hint{margin-top:18px;font-size:12px;color:#8e896f}
+  .hint kbd{
+    background:#2a2a22;border:2px solid #4a463a;border-radius:3px;
+    padding:1px 6px;font-size:11px;color:var(--ink-dim);
+  }
+
+  /* 반짝이 파티클 */
+  .spark{
+    position:fixed;pointer-events:none;font-size:22px;z-index:30;
+    animation:fly .9s ease-out forwards;
+  }
+  @keyframes fly{
+    0%{opacity:1;transform:translate(0,0) scale(1)}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .card.spinning,.card.landed,.spark{animation-duration:.01ms!important;animation-iteration-count:1!important}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 한글날 <span class="em">자음 뽑기</span></h1>
+  <p class="mission">뽑은 자음 2개가 들어간 낱말을 말하거나 그려보세요!</p>
+</header>
+
+<div class="modes" role="group" aria-label="뽑기 방식">
+  <button class="mode-btn" id="modeTwo"  aria-pressed="true">⚡ 2개 한번에 뽑기</button>
+  <button class="mode-btn" id="modeOne"  aria-pressed="false">👆 하나씩 뽑기</button>
+</div>
+
+<div class="stage">
+  <div class="slot">
+    <div class="slot-label">첫 번째 자음</div>
+    <div class="card" id="card0"><span class="char empty" id="char0">?</span></div>
+    <div class="name" id="name0"></div>
+  </div>
+  <div class="slot">
+    <div class="slot-label">두 번째 자음</div>
+    <div class="card" id="card1"><span class="char empty" id="char1">?</span></div>
+    <div class="name" id="name1"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="drawBtn">자음 뽑기!</button>
+  <button class="btn ghost" id="resetBtn">초기화</button>
+</div>
+
+<div class="options">
+  <label><input type="checkbox" id="optDup"> 같은 자음 중복 허용</label>
+  <label><input type="checkbox" id="optSound" checked> 효과음</label>
+</div>
+
+<div class="history">
+  <h2>최근 뽑은 자음</h2>
+  <div class="chips" id="chips"></div>
+</div>
+
+<p class="hint">
+  <kbd>Space</kbd> 뽑기 · <kbd>R</kbd> 초기화 · <kbd>F</kbd> 전체화면
+</p>
+
+<script>
+(function () {
+  "use strict";
+
+  // 쌍자음(ㄲㄸㅃㅆㅉ) 제외한 기본 자음 14개
+  const CONSONANTS = [
+    { ch: "ㄱ", name: "기역" }, { ch: "ㄴ", name: "니은" },
+    { ch: "ㄷ", name: "디귿" }, { ch: "ㄹ", name: "리을" },
+    { ch: "ㅁ", name: "미음" }, { ch: "ㅂ", name: "비읍" },
+    { ch: "ㅅ", name: "시옷" }, { ch: "ㅇ", name: "이응" },
+    { ch: "ㅈ", name: "지읒" }, { ch: "ㅊ", name: "치읓" },
+    { ch: "ㅋ", name: "키읔" }, { ch: "ㅌ", name: "티읕" },
+    { ch: "ㅍ", name: "피읖" }, { ch: "ㅎ", name: "히읗" }
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const cards = [$("card0"), $("card1")];
+  const chars = [$("char0"), $("char1")];
+  const names = [$("name0"), $("name1")];
+  const drawBtn = $("drawBtn"), resetBtn = $("resetBtn"), chipBox = $("chips");
+  const optDup = $("optDup"), optSound = $("optSound");
+  const modeTwo = $("modeTwo"), modeOne = $("modeOne");
+
+  let mode = "two";              // "two" | "one"
+  let results = [null, null];    // 확정된 자음
+  let busy = false;              // 회전 중 잠금
+  const history = [];
+
+  /* ---------- 효과음 (WebAudio) ---------- */
+  let ac = null;
+  function audio() {
+    if (!optSound.checked) return null;
+    if (!ac) { const C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+    if (ac && ac.state === "suspended") ac.resume();
+    return ac;
+  }
+  function beep(freq, dur, type, vol) {
+    const c = audio(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type || "square"; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.05, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(); o.stop(c.currentTime + dur);
+  }
+  const tick = () => beep(420 + Math.random() * 260, 0.04, "square", 0.035);
+  function fanfare() {
+    [[660, 0], [880, 110], [1180, 230]].forEach(([f, d]) =>
+      setTimeout(() => beep(f, 0.18, "triangle", 0.09), d));
+  }
+
+  /* ---------- 반짝이 ---------- */
+  function sparkle(el) {
+    const r = el.getBoundingClientRect();
+    const emojis = ["✨", "⭐", "🎉", "💫"];
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement("div");
+      s.className = "spark";
+      s.textContent = emojis[i % emojis.length];
+      s.style.left = (r.left + r.width / 2) + "px";
+      s.style.top = (r.top + r.height / 2) + "px";
+      const a = Math.random() * Math.PI * 2, d = 70 + Math.random() * 110;
+      s.style.setProperty("--dx", Math.cos(a) * d + "px");
+      s.style.setProperty("--dy", Math.sin(a) * d + "px");
+      document.body.appendChild(s);
+      setTimeout(() => s.remove(), 950);
+    }
+  }
+
+  /* ---------- 뽑기 로직 ---------- */
+  function pick(exclude) {
+    let pool = CONSONANTS;
+    if (exclude && !optDup.checked) {
+      const rest = CONSONANTS.filter((c) => c.ch !== exclude.ch);
+      if (rest.length) pool = rest;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // 한 칸을 뱅글뱅글 돌리다가 target에서 멈춘다
+  function spin(index, target, duration) {
+    return new Promise((resolve) => {
+      const card = cards[index], charEl = chars[index];
+      card.classList.remove("landed");
+      card.classList.add("spinning", "active");
+      charEl.classList.remove("empty");
+      names[index].textContent = "";
+
+      const start = performance.now();
+      let last = 0;
+
+      function frame(now) {
+        const t = Math.min((now - start) / duration, 1);
+        // 점점 느려지는 간격 (40ms → 260ms)
+        const gap = 40 + (260 - 40) * (t * t);
+        if (now - last >= gap) {
+          last = now;
+          charEl.textContent = CONSONANTS[Math.floor(Math.random() * CONSONANTS.length)].ch;
+          tick();
+        }
+        if (t < 1) { requestAnimationFrame(frame); return; }
+
+        card.classList.remove("spinning");
+        charEl.textContent = target.ch;
+        names[index].textContent = target.name;
+        void card.offsetWidth;            // 애니메이션 재시작
+        card.classList.add("landed");
+        sparkle(card);
+        fanfare();
+        setTimeout(() => card.classList.remove("active"), 600);
+        resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function addHistory() {
+    if (!results[0] || !results[1]) return;
+    history.unshift(results[0].ch + " + " + results[1].ch);
+    if (history.length > 8) history.pop();
+    chipBox.innerHTML = "";
+    history.forEach((h) => {
+      const d = document.createElement("div");
+      d.className = "chip"; d.textContent = h;
+      chipBox.appendChild(d);
+    });
+  }
+
+  function updateButton() {
+    if (busy) { drawBtn.disabled = true; return; }
+    drawBtn.disabled = false;
+    if (mode === "two") {
+      drawBtn.textContent = results[0] ? "다시 뽑기!" : "자음 뽑기!";
+    } else {
+      if (!results[0]) drawBtn.textContent = "첫 번째 뽑기";
+      else if (!results[1]) drawBtn.textContent = "두 번째 뽑기";
+      else drawBtn.textContent = "다시 뽑기!";
+    }
+  }
+
+  function reset(silent) {
+    results = [null, null];
+    for (let i = 0; i < 2; i++) {
+      cards[i].classList.remove("spinning", "landed", "active");
+      chars[i].textContent = "?";
+      chars[i].classList.add("empty");
+      names[i].textContent = "";
+    }
+    if (!silent) beep(300, 0.08, "sine", 0.05);
+    updateButton();
+  }
+
+  async function draw() {
+    if (busy) return;
+
+    // 이미 2개가 다 나왔으면 먼저 초기화
+    if (results[0] && results[1]) reset(true);
+
+    busy = true; updateButton();
+
+    if (mode === "two") {
+      const a = pick(null), b = pick(a);
+      results = [a, b];
+      await Promise.all([spin(0, a, 2000), spin(1, b, 2900)]);
+      addHistory();
+    } else {
+      const slot = results[0] ? 1 : 0;
+      const target = pick(slot === 1 ? results[0] : null);
+      results[slot] = target;
+      await spin(slot, target, 2300);
+      if (slot === 1) addHistory();
+    }
+
+    busy = false; updateButton();
+  }
+
+  function setMode(next) {
+    if (busy || mode === next) return;
+    mode = next;
+    modeTwo.setAttribute("aria-pressed", String(next === "two"));
+    modeOne.setAttribute("aria-pressed", String(next === "one"));
+    reset(true);
+  }
+
+  /* ---------- 이벤트 ---------- */
+  drawBtn.addEventListener("click", draw);
+  resetBtn.addEventListener("click", () => { if (!busy) reset(false); });
+  modeTwo.addEventListener("click", () => setMode("two"));
+  modeOne.addEventListener("click", () => setMode("one"));
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); draw(); }
+    else if (e.key === "r" || e.key === "R") { if (!busy) reset(false); }
+    else if (e.key === "f" || e.key === "F") {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+    }
+  });
+
+  updateButton();
+})();
+</script>
+</body>
+</html>
