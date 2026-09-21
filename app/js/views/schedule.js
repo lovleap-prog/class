@@ -4,7 +4,8 @@ import {
   CATEGORY, STATUS, WEEKDAY, fmtK, today, addDays, addMonths,
   weekStart, sundayStart, monthStart, monthEnd, range, parseYmd, isWeekend, ymd, occursOn,
 } from '../model.js';
-import { activitiesOn, recurringOn, afterSchoolFor, dayBundle } from '../select.js';
+import { activitiesOn, recurringOn, afterSchoolFor, dayBundle, clashesOn, timetableOn } from '../select.js';
+import { clashLabel } from '../conflict.js';
 import { openActivityForm } from '../ui/activityForm.js';
 import { openDayExport, openPeriodExport } from '../ui/exporter.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
@@ -28,11 +29,11 @@ export function statusBadge(a, { showAll = false } = {}) {
  * @param checkDate  이 날짜 기준으로 내 체크 상태를 반영한다(빈 값이면 체크 개념 없음)
  * @param showCheck  체크박스를 그릴지. 주간 화면은 상태만 반영하고 체크박스는 안 그린다.
  */
-export function activityCard(a, { compact = false, onChange, checkDate = '', showCheck = false, showStatus = false } = {}) {
+export function activityCard(a, { compact = false, onChange, checkDate = '', showCheck = false, showStatus = false, clash = null } = {}) {
   const chips = [a.target, a.place, a.owner, a.dept].filter(Boolean);
   const canEdit = isAdmin() || a.createdBy === currentUser().name;
   const done = isChecked(checkDate, a);
-  const card = h('div', { class: `card cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}${done ? ' is-done' : ''}${showCheck ? ' has-check' : ''}` },
+  const card = h('div', { class: `card cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}${done ? ' is-done' : ''}${showCheck ? ' has-check' : ''}${clash ? ' is-clash' : ''}` },
     showCheck
       ? h('label', { class: 'card-check', title: done ? '확인 표시 해제' : '확인했으면 체크하세요 (나에게만 보입니다)' },
         h('input', {
@@ -47,6 +48,7 @@ export function activityCard(a, { compact = false, onChange, checkDate = '', sho
         a.isRecurring ? h('span', { class: 'badge st-rec' }, '상시') : statusBadge(a, { showAll: showStatus }),
         a.endDate ? h('span', { class: 'badge st-span' }, `~ ${fmtK(a.endDate, { year: false })}`) : null),
       chips.length ? h('div', { class: 'chips' }, ...chips.map((c) => h('span', { class: 'chip' }, c))) : null,
+      clash ? h('p', { class: 'clash-note' }, '\u26A0 ', clashLabel(clash)) : null,
       !compact && a.detail ? h('p', { class: 'card-detail' }, a.detail) : null,
       !compact && a.status === 'rejected' && a.rejectReason
         ? h('p', { class: 'card-reject' }, `반려 사유: ${a.rejectReason}`) : null),
@@ -120,6 +122,54 @@ function bandNode(b, { compact = false, onClick } = {}) {
     h('span', { class: 'band-text' }, compact ? a.title : `${a.title}${a.target ? ` · ${a.target}` : ''}`),
     b.cutRight ? h('span', { class: 'band-arrow' }, '\u25B6') : null);
   return makeDraggable(node, a);
+}
+
+/** 중복 목록에서 그 항목을 되찾는다. */
+function findById(id, acts, slots) {
+  const a = acts.find((x) => x.id === id);
+  if (a) return a;
+  const s = (slots || []).find((x) => `tt_${x.id}` === id);
+  return s ? { ...s, time: `${s.period}교시` } : null;
+}
+
+/**
+ * 반복일정 한 줄. 행사와 겹칠 때 '이 날만 제외' 할 수 있어야 한다.
+ * 규칙 자체를 끄면 다른 주까지 사라지므로, 그 날짜만 예외로 넣는다.
+ */
+function recurringRow(a, day, clash, onChange) {
+  const card = activityCard(a, { compact: true, checkDate: day, showCheck: true, clash });
+  if (!isAdmin()) return card;
+  const btn = h('button', {
+    class: 'btn btn-sm btn-danger skip-btn',
+    title: '이 날짜에만 이 반복일정을 빼고, 다음 주부터는 그대로 운영합니다',
+    onClick: async (e) => {
+      e.stopPropagation();
+      const rule = list('recurring').find((r) => r.id === a.recurringId);
+      if (!rule) return;
+      if (!(await confirmDialog(`${fmtK(day, { year: false })} 에만 '${a.title}' 을(를) 빼시겠습니까?\n다른 날짜는 그대로 운영됩니다.`, { okText: '이 날만 빼기' }))) return;
+      const next = { ...rule, exceptions: [...(rule.exceptions || []), day] };
+      await put('recurring', next);
+      await audit('반복제외', rule.id, rule, next);
+      toast(`${fmtK(day, { year: false })} 에는 '${a.title}' 을(를) 뺐습니다.`, 'ok');
+      if (onChange) onChange();
+    },
+  }, '이 날만 빼기');
+  card.appendChild(h('div', { class: 'card-actions' }, btn));
+  return card;
+}
+
+/** 그 날 교담·특별실 시간표를 한 줄로 */
+function timetableStrip(slots, clash) {
+  return h('div', { class: 'tt-strip' }, ...slots.map((s) => {
+    const hits = clash.get(`tt_${s.id}`);
+    return h('span', {
+      class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}`,
+      title: hits ? clashLabel(hits) : [s.target, s.place, s.owner].filter(Boolean).join(' · '),
+    },
+      h('span', { class: 'tt-chip-sub' }, `${s.period}교시`),
+      hits ? h('span', { class: 'clash-mark' }, '\u26A0') : null,
+      h('span', { class: 'tt-chip-title' }, s.title));
+  }));
 }
 
 /** 일일 화면의 기간 일정 — 며칠째인지 함께 보여준다. */
@@ -198,7 +248,10 @@ export function renderDaily(ctx) {
   const rejected = acts.filter((a) => a.status === 'rejected');
   const rec = recurringOn(d);
   const after = afterSchoolFor(d);
+  const slots = timetableOn(d);
+  const clash = clashesOn(d);
   const rerender = () => ctx.refresh();
+  const cl = (a) => clash.get(a.id) || null;
 
   return h('div', { class: 'view' },
     dateBar(ctx, {
@@ -213,8 +266,22 @@ export function renderDaily(ctx) {
     }),
 
     pending.length
-      ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d })),
+      ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d, clash: cl(a) })),
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
+      : null,
+
+    clash.size
+      ? h('section', { class: 'sec sec-clash' },
+        h('div', { class: 'sec-head' },
+          h('h3', {}, `중복 ${clash.size}건`),
+          h('span', { class: 'muted small' }, '겹쳐도 되는 것이면 그대로 두셔도 됩니다')),
+        h('ul', { class: 'clash-list' },
+          ...[...clash.entries()].map(([id, hits]) => {
+            const me = hits[0].other && findById(id, [...approved, ...pending, ...rec, ...spans], slots);
+            return h('li', {},
+              h('strong', {}, me ? `${me.time || ''} ${me.title}` : id),
+              ' — ', clashLabel(hits));
+          })))
       : null,
 
     spans.length
@@ -224,10 +291,16 @@ export function renderDaily(ctx) {
         ...spans.map((a) => spanCard(a, d, rerender)))
       : null,
 
-    section('교육활동', approved.map((a) => activityCard(a, { onChange: rerender, checkDate: d, showCheck: true })),
+    section('교육활동', approved.map((a) => activityCard(a, { onChange: rerender, checkDate: d, showCheck: true, clash: cl(a) })),
       progressNode(d, [...spans, ...approved, ...rec], rerender)),
-    section('상시·반복 운영', rec.map((a) => activityCard(a, { compact: true, checkDate: d, showCheck: true })),
+    section('상시·반복 운영', rec.map((a) => recurringRow(a, d, cl(a), rerender)),
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('recurring') }, '반복일정 관리')),
+
+    slots.length
+      ? section(`교과교담·특별실 ${slots.length}칸`,
+        [timetableStrip(slots, clash)],
+        h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, '시간표 관리'))
+      : null,
     section('방과후학교', [afterSchoolTableNode(after)],
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리')),
 

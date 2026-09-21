@@ -38,7 +38,19 @@ function ruleRow(r, refresh) {
       class: `toggle${r.active ? ' on' : ''}`, title: r.active ? '운영 중' : '중지됨',
       onClick: () => toggle('active'),
     }, r.active ? '운영' : '중지')),
-    h('td', { class: 'nowrap' }, describeRule(r)),
+    h('td', { class: 'nowrap' },
+      describeRule(r),
+      (r.exceptions || []).length
+        ? h('button', {
+          class: 'chip-sug is-click',
+          title: `제외된 날짜: ${(r.exceptions || []).join(', ')}\n눌러서 되돌리기`,
+          onClick: async () => {
+            if (!(await confirmDialog(`제외해 둔 ${(r.exceptions || []).length}일을 모두 되돌릴까요?`, { okText: '되돌리기' }))) return;
+            await put('recurring', { ...r, exceptions: [] });
+            toast('제외를 모두 풀었습니다.', 'ok'); refresh();
+          },
+        }, `${(r.exceptions || []).length}일 제외`)
+        : null),
     h('td', { class: 'nowrap' }, r.time || '—'),
     h('td', { class: 'strong' }, r.title),
     h('td', {}, r.target || ''),

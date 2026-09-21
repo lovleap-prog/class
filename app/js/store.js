@@ -2,7 +2,7 @@
 // 화면 코드는 이 파일의 API만 사용한다.
 import { uid } from './model.js';
 
-export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks', 'staff', 'lessons'];
+export const COLLECTIONS = ['activities', 'recurring', 'afterschool', 'audit', 'checks', 'staff', 'lessons', 'timetable'];
 
 let backend = null;
 let user = { name: '', role: 'teacher', dept: '', email: '' };

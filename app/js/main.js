@@ -5,6 +5,7 @@ import { initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKin
 import { today, fmtK, weekStart, addDays, monthStart, monthEnd } from './model.js';
 import { renderDaily, renderWeekly, renderMonthly } from './views/schedule.js';
 import { renderRecurring } from './views/recurring.js';
+import { renderTimetable } from './views/timetable.js';
 import { renderAfterSchool } from './views/afterschool.js';
 import { renderApprovals } from './views/approvals.js';
 import { renderImporter } from './views/importer.js';
@@ -18,6 +19,7 @@ const TABS = [
   ['daily', '일일', renderDaily],
   ['weekly', '주간', renderWeekly],
   ['monthly', '월간', renderMonthly],
+  ['timetable', '시간표', renderTimetable],
   ['recurring', '반복일정', renderRecurring],
   ['afterschool', '방과후', renderAfterSchool],
   ['approvals', '승인함', renderApprovals],

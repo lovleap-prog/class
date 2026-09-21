@@ -475,3 +475,72 @@ body.dragging-now .band-grid { pointer-events: none; }
   .conn { display: none; }         /* 설정 탭에서 확인할 수 있다 */
   .drag-ghost { max-width: 88vw; }
 }
+
+/* ── 주간 시간표 ────────────────────── */
+.tt-grid {
+  display: grid; grid-template-columns: 82px repeat(5, minmax(0, 1fr)); gap: 3px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 8px; box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+.tt-corner, .tt-dow, .tt-period {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; padding: 6px 4px; background: var(--panel-2);
+  border-radius: 6px; font-size: 12.5px; text-align: center;
+}
+.tt-corner { font-weight: 700; color: var(--muted); }
+.tt-period { line-height: 1.25; }
+.tt-cell {
+  display: flex; flex-direction: column; gap: 3px; align-items: stretch;
+  min-height: 56px; padding: 4px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--panel);
+}
+.tt-cell.is-editable { cursor: pointer; }
+.tt-cell.is-editable:hover { border-color: var(--brand); }
+.tt-cell.drop-on { background: color-mix(in srgb, var(--brand) 14%, var(--panel)); box-shadow: inset 0 0 0 2px var(--brand); }
+.tt-add { color: var(--muted); font-size: 16px; text-align: center; opacity: 0; }
+.tt-cell.is-editable:hover .tt-add { opacity: .5; }
+.tt-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  width: 100%; padding: 3px 6px; border-radius: 5px; border: 1px solid transparent;
+  font-size: 11.5px; line-height: 1.3; text-align: left; cursor: pointer;
+  background: color-mix(in srgb, var(--cat-academic) 13%, transparent);
+  color: var(--cat-academic);
+}
+.tt-chip.kind-special { background: color-mix(in srgb, var(--cat-meeting) 14%, transparent); color: var(--cat-meeting); }
+.tt-chip:hover { border-color: currentColor; }
+.tt-chip-title { font-weight: 700; word-break: keep-all; }
+.tt-chip-sub { font-size: 10.5px; opacity: .8; }
+.tt-chip.is-clash {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger); border-color: var(--danger); border-style: dashed;
+}
+.tt-strip { display: flex; flex-wrap: wrap; gap: 5px; }
+.tt-strip .tt-chip { width: auto; flex-direction: row; align-items: center; gap: 5px; cursor: default; }
+
+/* ── 중복 표시 ──────────────────────── */
+.clash-mark { font-size: 11px; }
+.clash-count {
+  font-size: 12.5px; font-weight: 700; color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
+  border-radius: 999px; padding: 2px 10px;
+}
+.sec-clash { border-left: 3px solid var(--danger); }
+.clash-list { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; }
+.clash-list li { margin-bottom: 2px; }
+.card.is-clash { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 55%, transparent); }
+.clash-note { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--danger); }
+.skip-btn { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .tt-grid { grid-template-columns: 62px repeat(5, minmax(84px, 1fr)); }
+  .tt-cell { min-height: 46px; }
+}
+
+/* ── 교시 시각 설정 ─────────────────── */
+.period-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin-bottom: 10px; }
+.period-row { display: flex; align-items: center; gap: 6px; }
+.period-label { font-size: 12.5px; font-weight: 700; color: var(--muted); min-width: 42px; }
+.period-row .input { padding: 4px 8px; font-size: 13px; }
+@media (max-width: 640px) { .period-rows { grid-template-columns: 1fr; } }

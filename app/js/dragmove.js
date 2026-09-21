@@ -23,7 +23,9 @@ const MOUSE_SLACK = 5;       // 마우스는 이만큼 움직이면 끌기 시�
 
 /** 이 사람이 이 일정을 옮길 수 있나 */
 export function canMove(a) {
-  if (!a || a.isRecurring || a.source === 'recurring') return false;
+  if (!a) return false;
+  if (a.canDrag) return true;          // 시간표 칸처럼 스스로 판정을 끝낸 경우
+  if (a.isRecurring || a.source === 'recurring') return false;
   return isAdmin() || a.createdBy === currentUser().name;
 }
 
@@ -44,6 +46,9 @@ export function makeDropTarget(el, day) {
   el.dataset.day = day;
   return el;
 }
+
+/** 받는 칸으로 인정하는 것들. 날짜 칸과 시간표 칸. */
+const TARGET_SEL = '[data-day],[data-tt-dow]';
 
 function onDown(e, el, a) {
   if (e.button > 0) return;           // 오른쪽·가운데 버튼은 무시
@@ -113,7 +118,7 @@ function markTarget() {
   st.ghost.style.visibility = 'hidden';
   const under = document.elementFromPoint(st.x, st.y);
   st.ghost.style.visibility = '';
-  const cell = under && under.closest('[data-day]');
+  const cell = under && under.closest(TARGET_SEL);
   if (cell === st.target) return;
   if (st.target) st.target.classList.remove('drop-on');
   st.target = cell;
@@ -123,11 +128,12 @@ function markTarget() {
 async function onUp(e) {
   if (!st || e.pointerId !== st.pid) return;
   const { started, target, a } = st;
-  const day = target ? target.dataset.day : '';
   cleanup();
-  if (!started) return;
+  if (!started || !target) return;
   swallowNextClick();          // 끌고 놓은 뒤 칸이 눌리지 않게
-  if (day) await moveActivity(a.id, day);
+  // 옮기는 방법을 스스로 아는 항목(시간표 칸)은 그쪽에 맡긴다.
+  if (a.onDrop) { await a.onDrop(target); return; }
+  if (target.dataset.day) await moveActivity(a.id, target.dataset.day);
 }
 
 function onCancel(e) {

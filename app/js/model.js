@@ -95,6 +95,7 @@ export function newRecurring(partial = {}) {
     time: '', place: '', target: '', owner: '', dept: '',
     category: 'academic',
     startDate: today(), endDate: '',
+    exceptions: [],      // 이 날짜에는 쉰다. 행사와 겹칠 때 그 주만 빼는 용도.
     active: true, includeInNeis: true, note: '',
     createdBy: '', createdAt: new Date().toISOString(),
     ...partial,
@@ -133,6 +134,21 @@ export function newLesson(partial = {}) {
   };
 }
 
+/** 주간 시간표(교과교담·특별실) 항목 하나 */
+export function newSlot(partial = {}) {
+  return {
+    id: uid('slt'),
+    week: '',          // 그 주의 월요일 (weekStart)
+    dow: 1,            // 1=월 … 5=금
+    period: 1,         // 1~8교시
+    title: '',         // 예) 과학5, 공자람반1,2
+    target: '', place: '', owner: '',
+    kind: 'subject',   // subject(교과교담) | special(특별실·순회)
+    note: '',
+    ...partial,
+  };
+}
+
 let seq = 0;
 export function uid(prefix = 'id') {
   seq = (seq + 1) % 1000;
@@ -148,6 +164,7 @@ export function expandRecurring(rules, from, to) {
     for (const day of range(from, to)) {
       if (r.startDate && day < r.startDate) continue;
       if (r.endDate && day > r.endDate) continue;
+      if ((r.exceptions || []).includes(day)) continue;   // 그 날만 제외된 경우
       if (!matchesRule(r, day)) continue;
       out.push({
         id: `${r.id}@${day}`,
