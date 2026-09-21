@@ -24,18 +24,28 @@
 
 ## 바로 써 보기
 
+맨 위 폴더의 **`start-windows.bat`** (맥·리눅스는 **`start-mac-linux.command`**) 을 더블클릭하세요.
+브라우저가 `http://localhost:8000` 으로 자동으로 열립니다. 설정도 가입도 키도 필요 없습니다.
+
+직접 실행하려면:
+
 ```bash
 cd app && python3 -m http.server 8000
 ```
-브라우저에서 `http://localhost:8000` 을 엽니다.
-설정 없이 바로 동작하며, 자료는 그 브라우저에만 저장됩니다(체험용).
 
+> `index.html` 을 더블클릭하면 동작하지 않습니다(브라우저 보안 규칙). 위 방법으로 여세요.
+
+처음 켜면 [설정] 탭의 **[예시 자료 넣기]** 로 화면이 어떻게 보이는지 바로 확인할 수 있고,
+**[예시 자료만 지우기]** 로 예시만 골라 지울 수 있습니다.
+
+자세한 안내 → **[docs/START-LOCAL.md](docs/START-LOCAL.md)**
 학교 전체가 같이 쓰려면 → **[docs/SETUP-firebase.md](docs/SETUP-firebase.md)**
 
 ## 문서
 
 | | |
 |---|---|
+| [로컬로 시작하기](docs/START-LOCAL.md) | 설정 없이 바로 써 보기 |
 | [구글시트 vs Firebase 선택](docs/CHOOSE-BACKEND.md) | 어느 쪽을 써야 하는지, 왜 그런지 |
 | [Firebase 설정](docs/SETUP-firebase.md) | 실시간 공유 + 보안 규칙 (30분) |
 | [구글시트 연동](docs/SETUP-sheets.md) | 담당자 자유 입력 → 자동 정리 |

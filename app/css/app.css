@@ -312,3 +312,12 @@ body.widget { background: var(--panel); }
 .tbl-edit td:nth-child(4) .cell { min-width: 190px; }
 .tbl-edit td:nth-child(2) .cell { min-width: 140px; }
 .month-cell:focus-visible, .week-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+/* ── file:// 로 열었을 때 안내 ───────── */
+.boot-help { max-width: 640px; margin: 48px auto; padding: 28px 32px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.boot-help h1 { font-size: 19px; margin-bottom: 12px; }
+.boot-help h2 { font-size: 14px; margin: 20px 0 6px; color: var(--brand); }
+.boot-help p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.7; }
+.boot-help code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.boot-help pre { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 13px; overflow-x: auto; }
+.boot-help .boot-note { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }

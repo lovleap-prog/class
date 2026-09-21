@@ -3,6 +3,7 @@ import { h, toast, confirmDialog, download } from '../lib/dom.js';
 import { loadConfig, saveConfig, resetConfig } from '../config.js';
 import { currentUser, setUser, exportAll, importAll, backendKind, list } from '../store.js';
 import { ROLE } from '../model.js';
+import { insertSample, removeSample, hasSample } from '../sampledata.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -82,6 +83,29 @@ export function renderSettings(ctx) {
     box('결재용 한글 문서', h('div', { class: 'form-grid' },
       field('글꼴', fontIn),
       field('글자 크기(pt)', sizeIn))),
+
+    box('둘러보기용 예시 자료', h('div', {},
+      h('p', { class: 'note' },
+        '이번 주 일정·반복일정·방과후 강좌 예시를 한 번에 넣어 화면이 어떻게 보이는지 확인할 수 있습니다. ',
+        '예시 자료만 골라서 한 번에 지울 수 있으니 실제 자료와 섞이지 않습니다.'),
+      h('div', { class: 'row gap' },
+        h('button', {
+          class: 'btn', onClick: async () => {
+            if (hasSample() && !(await confirmDialog('이미 예시 자료가 들어 있습니다. 한 벌 더 넣을까요?'))) return;
+            const n = await insertSample();
+            toast(`예시 자료 ${n}건을 넣었습니다. [일일]·[주간] 탭을 보세요.`, 'ok');
+            ctx.refresh();
+          },
+        }, '예시 자료 넣기'),
+        h('button', {
+          class: 'btn btn-danger', onClick: async () => {
+            if (!hasSample()) return toast('지울 예시 자료가 없습니다.', 'warn');
+            if (!(await confirmDialog('예시 자료만 골라서 지웁니다. 직접 입력하신 자료는 그대로 남습니다.', { danger: true, okText: '지우기' }))) return;
+            const n = await removeSample();
+            toast(`예시 자료 ${n}건을 지웠습니다.`, 'ok');
+            ctx.refresh();
+          },
+        }, '예시 자료만 지우기')))),
 
     box('백업 · 복원', h('div', { class: 'row gap' },
       h('button', {
