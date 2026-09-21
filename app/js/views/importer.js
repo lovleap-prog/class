@@ -2,13 +2,14 @@
 // "각 계 담당자가 편한 형식으로 적어 보내면 자동으로 들어간다" 를 담당하는 화면.
 import { h, toast, confirmDialog, clear } from '../lib/dom.js';
 import { CATEGORY, newActivity, newAfterSchool, today, WEEKDAY } from '../model.js';
-import { parseFreeText, parseTable } from '../lib/textparse.js';
+import { parseFreeText, parseTable, findMonthContext } from '../lib/textparse.js';
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 import { putMany, audit, currentUser, isAdmin } from '../store.js';
 
 const FIELDS = [
   ['date', '날짜', 'date'],
+  ['endDate', '종료', 'date'],
   ['time', '시간', 'text'],
   ['title', '활동명', 'text'],
   ['target', '대상', 'text'],
@@ -36,7 +37,13 @@ export function renderImporter(ctx) {
   });
 
   const yearInput = h('input', { class: 'input sm', type: 'number', value: String(new Date().getFullYear()), title: '연도가 없는 날짜에 적용할 연도' });
-  const fileInput = h('input', { type: 'file', class: 'hidden', accept: '.hwpx,.xlsx,.csv,.tsv,.txt' });
+  const fileInput = h('input', { type: 'file', class: 'sr-file', accept: '.hwpx,.xlsx,.csv,.tsv,.txt' });
+
+  /** 기준 연도 입력값 위에, 문서에서 찾은 연·월을 덧씌운다. */
+  const docContext = (text) => {
+    const found = findMonthContext(text) || {};
+    return { year: found.year || +yearInput.value, month: found.month };
+  };
 
   const setRows = (rows, source) => {
     st.rows = rows.map((r) => ({ ...r, _include: true }));
@@ -52,20 +59,22 @@ export function renderImporter(ctx) {
     try {
       if (name.endsWith('.hwpx')) {
         const { paragraphs, tables } = await readHwpx(file);
-        const fromTables = tables.flatMap((t) => parseTable(t, { year: +yearInput.value }));
-        const rows = fromTables.length ? fromTables : parseFreeText(paragraphs.join('\n'), { year: +yearInput.value });
+        // 월중계획은 날짜 칸에 '일' 숫자만 있고 연·월은 제목에 있다. 문서 전체에서 먼저 찾는다.
+        const ctxDoc = docContext(paragraphs.join('\n') + ' ' + tables.flat(2).join(' '));
+        const fromTables = tables.flatMap((t) => parseTable(t, ctxDoc));
+        const rows = fromTables.length ? fromTables : parseFreeText(paragraphs.join('\n'), ctxDoc);
         setRows(rows.map((r) => ({ ...r, source: 'hwpx' })), 'hwpx');
       } else if (name.endsWith('.xlsx')) {
         const grid = await readXlsx(file);
-        setRows(parseTable(grid, { year: +yearInput.value }).map((r) => ({ ...r, source: 'xlsx' })), 'xlsx');
+        setRows(parseTable(grid, docContext(grid.flat().join(' '))).map((r) => ({ ...r, source: 'xlsx' })), 'xlsx');
       } else if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')) {
         const text = await file.text();
         if (name.endsWith('.txt')) {
-          setRows(parseFreeText(text, { year: +yearInput.value }).map((r) => ({ ...r, source: 'text' })), 'text');
+          setRows(parseFreeText(text, docContext(text)).map((r) => ({ ...r, source: 'text' })), 'text');
         } else {
           const sep = name.endsWith('.tsv') ? '\t' : ',';
           const grid = text.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean).map((l) => splitCsv(l, sep));
-          setRows(parseTable(grid, { year: +yearInput.value }).map((r) => ({ ...r, source: 'csv' })), 'csv');
+          setRows(parseTable(grid, docContext(text)).map((r) => ({ ...r, source: 'csv' })), 'csv');
         }
       } else if (name.endsWith('.hwp')) {
         toast('구버전 .hwp 는 바로 읽을 수 없습니다. 한글에서 [다른 이름으로 저장] → "HWPX 문서"로 저장해 올려주세요.', 'warn');
@@ -172,7 +181,7 @@ export function renderImporter(ctx) {
       if (!res.ok) throw new Error(`서버 응답 ${res.status}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '시트를 읽지 못했습니다.');
-      setRows(parseTable(data.rows, { year: +yearInput.value }).map((r) => ({ ...r, source: 'sheet' })), 'sheet');
+      setRows(parseTable(data.rows, docContext(data.rows.flat().join(' '))).map((r) => ({ ...r, source: 'sheet' })), 'sheet');
     } catch (e) {
       console.error(e);
       toast('구글시트를 불러오지 못했습니다: ' + e.message + ' — 시트를 CSV로 내려받아 올리는 방법도 있습니다.', 'warn');
@@ -192,7 +201,7 @@ export function renderImporter(ctx) {
         h('div', { class: 'row gap' },
           h('button', {
             class: 'btn btn-primary',
-            onClick: () => setRows(parseFreeText(paste.value, { year: +yearInput.value }).map((r) => ({ ...r, source: 'text' })), 'text'),
+            onClick: () => setRows(parseFreeText(paste.value, docContext(paste.value)).map((r) => ({ ...r, source: 'text' })), 'text'),
           }, '읽어들이기'),
           h('button', { class: 'btn', onClick: () => { paste.value = ''; } }, '지우기')))),
 

@@ -62,7 +62,7 @@ export function renderSettings(ctx) {
   const fontIn = h('input', { class: 'input', value: cfg.hwp.font });
   const sizeIn = h('input', { class: 'input', type: 'number', min: '8', max: '20', value: String(cfg.hwp.fontSize) });
 
-  const fileIn = h('input', { type: 'file', class: 'hidden', accept: '.json' });
+  const fileIn = h('input', { type: 'file', class: 'sr-file', accept: '.json' });
   fileIn.addEventListener('change', async () => {
     const f = fileIn.files[0]; fileIn.value = '';
     if (!f) return;

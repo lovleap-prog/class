@@ -22,6 +22,25 @@ export async function createFirestoreBackend(cfg) {
 
   const cache = Object.fromEntries(COLLECTIONS.map((c) => [c, []]));
   let firstLoad;
+  let stopChecks = null;   // 개인 체크 구독 해제 함수
+
+  // 개인 체크는 남이 읽을 수 없어야 하므로 컬렉션 전체가 아니라 '내 문서 하나'만 구독한다.
+  // (파이어스토어는 권한 없는 문서가 섞일 수 있는 질의를 통째로 거부하기 때문에,
+  //  읽기 규칙을 본인으로 좁히려면 구독도 문서 단위여야 한다)
+  function watchMyChecks(uid) {
+    if (stopChecks) { stopChecks(); stopChecks = null; }
+    cache.checks = [];
+    emit('checks');
+    if (!uid) return;
+    stopChecks = dbMod.onSnapshot(
+      dbMod.doc(db, 'schools', schoolId, 'checks', uid),
+      (snap) => {
+        cache.checks = snap.exists() ? [{ id: snap.id, ...snap.data() }] : [];
+        emit('checks');
+      },
+      (err) => console.error('[firestore] checks', err),
+    );
+  }
 
   async function signIn() {
     const provider = new authMod.GoogleAuthProvider();
@@ -51,12 +70,14 @@ export async function createFirestoreBackend(cfg) {
   }
 
   authMod.onAuthStateChanged(auth, async (u) => {
-    if (u) { await resolveMember(u); emit('auth'); }
-    else { setUser({ uid: '', role: 'teacher' }); emit('auth'); }
+    if (u) { await resolveMember(u); watchMyChecks(u.uid); emit('auth'); }
+    else { setUser({ uid: '', role: 'teacher' }); watchMyChecks(null); emit('auth'); }
   });
 
   function watch() {
-    const waits = COLLECTIONS.map((c) => new Promise((res) => {
+    // checks 는 로그인이 끝난 뒤 watchMyChecks() 가 따로 구독한다.
+    const shared = COLLECTIONS.filter((c) => c !== 'checks');
+    const waits = shared.map((c) => new Promise((res) => {
       let done = false;
       dbMod.onSnapshot(base(c), (snap) => {
         cache[c] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));

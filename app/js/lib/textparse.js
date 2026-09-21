@@ -134,6 +134,9 @@ export function extractTime(line) {
   }
   m = line.match(/(\d)\s*[~-]\s*(\d)\s*교시/);
   if (m) return { value: `${m[1]}~${m[2]}교시`, rest: strip(line, m) };
+  // '3,2교시' 처럼 학년별로 교시가 다를 때 쓰는 표기
+  m = line.match(/(\d)\s*,\s*(\d)\s*교시/);
+  if (m) return { value: `${m[1]},${m[2]}교시`, rest: strip(line, m) };
   m = line.match(/(\d)\s*교시/);
   if (m) return { value: `${m[1]}교시`, rest: strip(line, m) };
   m = line.match(/(아침활동|아침|조회|중식|점심시간|점심|방과\s*후|종례|창체|창의적\s*체험활동)/);
@@ -147,9 +150,13 @@ export function extractTarget(line) {
   if (m) return { value: m[0].replace(/\s+/g, ''), rest: strip(line, m) };
   m = line.match(/(\d)\s*학년\s*(\d)\s*반/);
   if (m) return { value: `${m[1]}학년 ${m[2]}반`, rest: strip(line, m) };
-  m = line.match(/(\d)\s*[~-]\s*(\d)\s*학년/);
+  // 월중계획은 '학' 을 빼고 '1-6년', '5,6년' 으로 적는 경우가 많다.
+  // 앞에 숫자가 오면(2026년) 연도이므로 제외한다.
+  m = line.match(/(?<!\d)(\d)\s*,\s*(\d)\s*학?년(?![도간생차])/);
+  if (m) return { value: `${m[1]},${m[2]}학년`, rest: strip(line, m) };
+  m = line.match(/(?<!\d)(\d)\s*[~-]\s*(\d)\s*학?년(?![도간생차])/);
   if (m) return { value: `${m[1]}~${m[2]}학년`, rest: strip(line, m) };
-  m = line.match(/(\d)\s*학년/);
+  m = line.match(/(?<!\d)(\d)\s*학?년(?![도간생차])/);
   if (m) return { value: `${m[1]}학년`, rest: strip(line, m) };
   m = line.match(/(\d)\s*-\s*(\d)(?![\d])/);
   if (m) return { value: `${m[1]}학년 ${m[2]}반`, rest: strip(line, m) };
@@ -219,6 +226,17 @@ const HEADER_MAP = [
 /** 표가 머리글을 가지고 있으면 열을 매핑해서 읽고, 아니면 각 행을 자유 텍스트로 해석한다. */
 export function parseTable(rows, ctx = {}) {
   if (!rows || !rows.length) return [];
+
+  // 제목만 들어 있는 표(노란 머리글 상자 등)는 일정이 아니다.
+  if (rows.length <= 3 && /계획|낙성|학교$/.test(rows.map((r) => r.join(' ')).join(' ')) &&
+      findMonthContext(rows.map((r) => r.join(' ')).join(' '))) {
+    return [];
+  }
+
+  // 월중 교육활동계획 표(일 | 요일 | 주요 업무 내용 | 비고)는 규칙이 달라 따로 읽는다.
+  const monthPlan = parseMonthPlan(rows, ctx);
+  if (monthPlan) return monthPlan;
+
   const headerIdx = rows.findIndex((r) => scoreHeader(r) >= 2);
   if (headerIdx < 0) {
     return parseFreeText(rows.map((r) => r.filter(Boolean).join(' ')).join('\n'), ctx);
@@ -268,3 +286,163 @@ function scoreHeader(row) {
 }
 
 export const CATEGORY_KEYS = Object.keys(CATEGORY);
+
+// ── 월중 교육활동계획 표 ─────────────────────────────────────
+// 학교 월중계획은 '일 | 요일 | 주요 업무 내용 | 비고' 한 장짜리 표이고,
+// 한 칸 안에 그날의 일정이 쉼표로 여러 개 들어간다.
+//
+//   1 | 화 | 양성평등교육주간(~4), 학교스포츠클럽(10:30, 부서별 장소), 영어원어민 순회
+//
+// 두 가지를 알아야 제대로 읽힌다.
+//  (1) 칸을 나누는 쉼표와 괄호 안의 쉼표는 다르다. 괄호 깊이를 세면서 나눈다.
+//  (2) 날짜는 칸에 없고 '일' 열의 숫자 + 문서 제목의 '2026년 9월' 을 합쳐 만든다.
+
+/** 문서 어딘가의 '2026년 9월' 표기에서 연·월을 찾는다. */
+export function findMonthContext(text) {
+  const t = String(text || '');
+  let m = t.match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+  if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) {
+    return { year: Number(m[1]), month: Number(m[2]) };
+  }
+  m = t.match(/(\d{1,2})\s*월\s*(?:중)?\s*(?:주요\s*)?(?:교육활동|업무|행사)?\s*계획/);
+  if (m && Number(m[1]) >= 1 && Number(m[1]) <= 12) return { month: Number(m[1]) };
+  return null;
+}
+
+/**
+ * 괄호 깊이를 세면서 쉼표로 나눈다.
+ * '학교스포츠클럽(10:30, 부서별 장소)' 안의 쉼표는 건드리지 않는다.
+ */
+export function splitActivities(text) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of String(text || '')) {
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+    if ((ch === ',' || ch === '，' || ch === '、') && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  parts.push(cur);
+
+  // 쉼표를 빠뜨린 '…(…) 다음활동(…)' 도 나눠준다.
+  // 뒤쪽에 또 괄호가 있을 때만 나눠서 '…(~4) 운영' 같은 걸 자르지 않는다.
+  const out = [];
+  for (const part of parts) {
+    let rest = part;
+    let m;
+    while ((m = rest.match(/\)\s+(?=[^,)]{2,}\()/))) {
+      out.push(rest.slice(0, m.index + 1));
+      rest = rest.slice(m.index + m[0].length);
+    }
+    out.push(rest);
+  }
+  return out.map((x) => x.trim()).filter(Boolean);
+}
+
+/** 월중계획 표의 열 위치를 찾는다. 아니면 null. */
+function monthPlanColumns(rows) {
+  const dayCell = (c) => /^\d{1,2}\s*\(?\s*[월화수목금토일]?\s*\)?$/.test(String(c || '').trim());
+
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const cells = rows[i].map((c) => String(c || '').replace(/\s/g, ''));
+    const dayIdx = cells.findIndex((c) => c === '일' || c === '일자' || c === '날짜');
+    const contentIdx = cells.findIndex((c) => c.length <= 12 && /내용|업무|일정|행사|활동/.test(c));
+    if (dayIdx >= 0 && contentIdx >= 0 && contentIdx !== dayIdx) {
+      const noteIdx = cells.findIndex((c) => /비고|참고/.test(c));
+      return { headerIdx: i, dayIdx, contentIdx, noteIdx };
+    }
+  }
+
+  // 머리글이 없어도 1열이 날짜 숫자, 2열이 요일이면 월중계획으로 본다.
+  const body = rows.filter((r) => r.length >= 3);
+  if (body.length >= 5) {
+    const dayLike = body.filter((r) => dayCell(r[0])).length;
+    const dowLike = body.filter((r) => /^[월화수목금토일]$/.test(String(r[1] || '').trim())).length;
+    if (dayLike >= body.length * 0.6 && dowLike >= body.length * 0.6) {
+      return { headerIdx: rows.indexOf(body[0]) - 1, dayIdx: 0, contentIdx: 2, noteIdx: 3 };
+    }
+  }
+  return null;
+}
+
+/** 월중계획 표 → 일정 행 목록. 월중계획이 아니면 null 을 돌려준다. */
+export function parseMonthPlan(rows, ctx = {}) {
+  const col = monthPlanColumns(rows);
+  if (!col) return null;
+
+  const year = ctx.year || new Date().getFullYear();
+  const month = ctx.month || null;   // 모르면 날짜를 비워두고 사용자가 채운다
+  const out = [];
+
+  for (let i = col.headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const dayText = String(r[col.dayIdx] || '').trim();
+    const dayNum = Number((dayText.match(/^(\d{1,2})/) || [])[1]);
+    const content = String(r[col.contentIdx] || '').trim();
+    if (!content) continue;                        // 주말처럼 비어 있는 날은 건너뛴다
+    if (!(dayNum >= 1 && dayNum <= 31)) continue;
+
+    const date = month ? `${year}-${pad2(month)}-${pad2(dayNum)}` : '';
+    const note = col.noteIdx >= 0 ? String(r[col.noteIdx] || '').trim() : '';
+
+    for (const piece of splitActivities(content)) {
+      const item = parseActivityPiece(piece, { date, year, month, note });
+      if (item) out.push(item);
+    }
+  }
+  return out;
+}
+
+/**
+ * '학교스포츠클럽(10:30, 부서별 장소)' 같은 한 덩어리를 항목 하나로 바꾼다.
+ * 괄호 안은 시간·대상을 먼저 걷어내고 남는 것을 장소로 본다.
+ * ('부서별 장소', 'AI교실', '별초병설유' 처럼 장소 이름을 목록으로 다 담을 수 없기 때문)
+ */
+export function parseActivityPiece(piece, { date = '', year, month, note = '' } = {}) {
+  let line = String(piece || '').trim();
+  if (!line) return null;
+
+  // '(~4)' = 4일까지 이어지는 주간 행사
+  let endDate = '';
+  const span = line.match(/\(\s*~\s*(\d{1,2})\s*\)/);
+  if (span) {
+    const last = Number(span[1]);
+    if (month && last >= 1 && last <= 31) {
+      const cand = `${year}-${pad2(month)}-${pad2(last)}`;
+      if (cand > date) endDate = cand;
+    }
+    line = (line.slice(0, span.index) + ' ' + line.slice(span.index + span[0].length)).trim();
+  }
+
+  let time = '';
+  let target = '';
+  let place = '';
+  let owner = '';
+
+  const paren = line.match(/^([^()]*?)\s*\(([^()]*)\)\s*(.*)$/);
+  if (paren && paren[1].trim()) {
+    let inside = paren[2];
+    const t = extractTime(inside); if (t) { time = t.value; inside = t.rest; }
+    const g = extractTarget(inside); if (g) { target = g.value; inside = g.rest; }
+    const o = extractOwner(inside); if (o) { owner = o.value; inside = o.rest; }
+    place = cleanTitle(inside);
+    line = `${paren[1]} ${paren[3]}`.trim();
+  } else {
+    const t = extractTime(line); if (t) { time = t.value; line = t.rest; }
+    const g = extractTarget(line); if (g) { target = g.value; line = g.rest; }
+    const p = extractPlace(line); if (p) { place = p.value; line = p.rest; }
+    const o = extractOwner(line); if (o) { owner = o.value; line = o.rest; }
+  }
+
+  const title = cleanTitle(line);
+  if (!title) return null;
+
+  return {
+    date, endDate, time, title, detail: note,
+    target, place, owner, dept: '',
+    category: guessCategory(piece),
+    _raw: String(piece).trim(),
+    _needsDate: !date,
+  };
+}
