@@ -78,7 +78,8 @@ function readTable(tbl) {
           else walk(c);
         }
       })(tc);
-      cells.push(parts.join(' ').trim());
+      // 줄바꿈을 살린다. 시간표는 한 칸에 여러 줄이 들어가고, 그 줄이 곧 항목 하나다.
+      cells.push(parts.map((x) => x.trim()).filter(Boolean).join('\n'));
     }
     if (cells.length) rows.push(cells);
   }

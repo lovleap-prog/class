@@ -324,7 +324,7 @@ export function splitActivities(text) {
   for (const ch of String(text || '')) {
     if ('([{'.includes(ch)) depth++;
     else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
-    if ((ch === ',' || ch === '，' || ch === '、') && depth === 0) { parts.push(cur); cur = ''; continue; }
+    if ((ch === ',' || ch === '，' || ch === '、' || ch === '\n') && depth === 0) { parts.push(cur); cur = ''; continue; }
     cur += ch;
   }
   parts.push(cur);
