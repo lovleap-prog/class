@@ -54,6 +54,32 @@ https://app.netlify.com → **Sign up** → **GitHub** 로 가입합니다.
 
 4. **Deploy** 를 누르면 1분쯤 뒤 `random-name-12345.netlify.app` 주소가 나옵니다.
 
+## 2-1. ⚠️ 공개로 바꾸기 — 안 하면 아무도 못 엽니다
+
+넷리파이는 **새 프로젝트를 비공개로 만듭니다.** 그대로 두면 선생님들이 주소를 열었을 때
+`This site is private — Sign in with an invited Netlify account` 만 뜹니다.
+
+프로젝트 화면에서 사이트 이름 아래의 **[🌐 Make public]** 을 누르세요.
+
+누른 뒤 **시크릿 창(Ctrl+Shift+N)** 으로 주소를 다시 열어 확인하세요.
+이름 입력 창이 뜨면 된 것입니다. 배포할 때마다 이 확인을 한 번 해두면 마음이 놓입니다.
+
+### 공개로 바꿔도 되나
+
+됩니다. 여기서 '공개' 는 **앱 파일(html·js·css)을 아무나 받을 수 있다**는 뜻이지
+학교 자료가 공개된다는 뜻이 아닙니다.
+
+| | 무엇이 지키나 |
+|---|---|
+| 앱 파일 | 안 지킵니다. 원래 공개돼도 되는 것들입니다 |
+| 일정 · 출장 · 개인 메모 | **파이어베이스 구글 로그인 + 보안 규칙** |
+
+보안 규칙이 모든 자료에 `signedIn()` 을 걸어두었기 때문에, 주소를 아는 사람이 들어와도
+로그인하지 않으면 한 줄도 보이지 않습니다.
+`config.js` 의 `googleHostedDomain` 에 학교 도메인을 적으면 그 계정만 들어오게 더 조일 수 있습니다.
+
+> 넷리파이의 비밀번호 보호는 유료(Pro) 기능입니다. 쓸 필요가 없습니다 — 앱에 로그인이 있습니다.
+
 ## 3. 주소 바꾸기
 
 **Project configuration → Project details → Change site name**
@@ -97,6 +123,7 @@ https://app.netlify.com → **Sign up** → **GitHub** 로 가입합니다.
 |---|---|
 | 구글 로그인 창이 뜨자마자 닫힘 | 4번(승인된 도메인)을 안 했습니다 |
 | 화면이 옛날 그대로 | `sw.js` 의 `VERSION` 을 안 올렸습니다. 그 컴퓨터에서 **Ctrl+Shift+R** |
+| `This site is private` 만 뜸 | **2-1번** 의 [Make public] 을 안 눌렀습니다 |
 | 빈 화면 | 배포한 가지가 옛 가지입니다. 0번을 보세요 |
 | `Page not found` | Publish directory 가 `app` 이 아닙니다. `netlify.toml` 이 저장소 뿌리에 있는지 확인 |
 | 자료가 저장은 되는데 남에게 안 보임 | 파이어베이스 설정이 아직입니다. `SETUP-firebase.md` |
