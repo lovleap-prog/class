@@ -23,7 +23,7 @@ export function renderRecurring(ctx) {
       ? h('div', { class: 'table-wrap' },
         h('table', { class: 'tbl' },
           h('thead', {}, h('tr', {},
-            ...['운영', '주기', '시간', '활동명', '대상', '장소', '담당', '결재문구', ''].map((t) => h('th', {}, t)))),
+            ...['운영', '주기', '시간', '활동명', '대상', '장소', '담당', '결재문구', '주간', ''].map((t) => h('th', {}, t)))),
           h('tbody', {}, ...rules.map((r) => ruleRow(r, refresh)))))
       : h('div', { class: 'empty' }, '등록된 반복일정이 없습니다.'));
 }
@@ -61,6 +61,11 @@ function ruleRow(r, refresh) {
       title: '나이스 결재문구·메신저 안내에 포함할지',
       onClick: () => toggle('includeInNeis'),
     }, r.includeInNeis !== false ? '포함' : '제외')),
+    h('td', {}, h('button', {
+      class: `toggle${r.showInWeekly !== false ? ' on' : ''}`,
+      title: '주간 화면에 낱개로 띄울지. 매일 도는 일정은 꺼두면 주간이 깔끔합니다.',
+      onClick: () => toggle('showInWeekly'),
+    }, r.showInWeekly !== false ? '표시' : '숨김')),
     h('td', { class: 'nowrap' },
       h('button', { class: 'icon-btn', title: '수정', onClick: () => openRuleForm(r, refresh) }, '✎'),
       h('button', {
@@ -97,6 +102,7 @@ export function openRuleForm(existing, onSaved) {
     ...Object.entries(CATEGORY).map(([k, v]) => h('option', { value: k, selected: r.category === k }, v)));
 
   const neisCb = h('input', { type: 'checkbox', checked: r.includeInNeis !== false });
+  const weekCb = h('input', { type: 'checkbox', checked: r.showInWeekly !== false });
   const note = h('textarea', { class: 'input', rows: 2 }); note.value = r.note || '';
 
   const wdRow = h('div', { class: 'wd-row' }, ...wdBoxes);
@@ -124,7 +130,12 @@ export function openRuleForm(existing, onSaved) {
     field('종료일', mk('endDate', { type: 'date' }), '학기 말 등. 비우면 계속'),
     h('div', { class: 'span2' }, field('메모', note)),
     h('div', { class: 'span2' },
-      h('label', { class: 'check' }, neisCb, '나이스 결재문구·메신저 안내문에 포함')));
+      h('label', { class: 'check' }, neisCb, '나이스 결재문구·메신저 안내문에 포함')),
+    h('div', { class: 'span2' },
+      h('label', { class: 'check' }, weekCb, '주간 교육활동 화면에 낱개로 표시'),
+      h('span', { class: 'field-hint' },
+        '아침 독서처럼 매일 도는 일정은 꺼두세요. 주간 화면이 같은 줄로 가득 찹니다. ',
+        '꺼도 일일 화면과 결재 문구에는 그대로 나옵니다.')));
 
   setTimeout(syncVisibility, 0);
 
@@ -151,6 +162,7 @@ export function openRuleForm(existing, onSaved) {
           category: catSel.value,
           startDate: val('startDate') || today(), endDate: val('endDate'),
           note: note.value.trim(), includeInNeis: neisCb.checked,
+          showInWeekly: weekCb.checked,
           createdBy: r.createdBy || currentUser().name,
         });
         await put('recurring', r);

@@ -101,6 +101,9 @@ export function newRecurring(partial = {}) {
     startDate: today(), endDate: '',
     exceptions: [],      // 이 날짜에는 쉰다. 행사와 겹칠 때 그 주만 빼는 용도.
     active: true, includeInNeis: true, note: '',
+    // 주간 화면에 낱개로 띄울지. 아침 독서처럼 매일 도는 것은 주마다 스무 번씩
+    // 되풀이돼 피로하기만 하다. 일일 화면과 결재 문구에는 그대로 나온다.
+    showInWeekly: true,
     createdBy: '', createdAt: new Date().toISOString(),
     ...partial,
   };
@@ -266,6 +269,7 @@ export function expandRecurring(rules, from, to) {
         source: 'recurring',
         isRecurring: true,
         includeInNeis: r.includeInNeis !== false,
+        showInWeekly: r.showInWeekly !== false,
       });
     }
   }

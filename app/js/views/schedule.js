@@ -530,7 +530,10 @@ export function renderWeekly(ctx) {
         h('div', { class: 'week-body' },
           // 기간 일정은 위쪽 띠에 이미 나와 있으므로 칸 안에서는 뺀다
           ...b.activities.filter((a) => !isSpan(a)).map((a) => activityCard(a, { compact: true, onChange: rerender, checkDate: day })),
-          ...b.recurring.map((a) => activityCard(a, { compact: true, checkDate: day })),
+          // 매일 도는 반복일정은 주마다 스무 번씩 되풀이돼 피로하다.
+          // 반복일정 탭에서 '주간' 을 꺼둔 것은 여기서 뺀다(일일에는 그대로 나온다).
+          ...b.recurring.filter((a) => a.showInWeekly !== false)
+            .map((a) => activityCard(a, { compact: true, checkDate: day })),
           b.afterSchool.length
             ? h('div', { class: 'mini-after' }, `방과후 ${b.afterSchool.length}강좌`)
             : null,
