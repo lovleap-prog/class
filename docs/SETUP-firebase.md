@@ -198,14 +198,24 @@ const DEFAULTS = {
 
 ## 8. 배포
 
-앱은 정적 파일이라 아무 데나 올려도 됩니다. 가장 간단한 두 가지:
+앱은 정적 파일이라 아무 데나 올려도 됩니다.
 
-- **GitHub Pages** — 이 저장소 Settings → Pages → Branch `main` / 폴더 `/ (root)`
+**→ 넷리파이로 올리는 법은 `docs/DEPLOY-netlify.md` 에 따로 적어두었습니다.**
+깃허브에 연결해두면 올릴 때마다 자동으로 배포되고, 명령어를 쓸 일이 없습니다.
+
+다른 길도 있습니다.
+
+- **GitHub Pages** — 저장소 Settings → Pages → Branch `main` / 폴더 `/ (root)`
   → 주소는 `https://<계정>.github.io/class/app/`
 - **Firebase Hosting** — `npm i -g firebase-tools && firebase init hosting && firebase deploy`
   (public 폴더를 `app` 으로 지정)
 
 **반드시 `https://` 주소여야 합니다.** 그래야 설치(PWA)와 구글 로그인이 됩니다.
+
+### ⚠️ 어디에 올리든 — 승인된 도메인
+
+배포 주소가 정해지면 **Authentication → Settings → 승인된 도메인** 에 그 주소를 넣어야 합니다.
+넣지 않으면 구글 로그인 창이 뜨자마자 닫힙니다. 가장 흔한 실수입니다.
 
 ## 고친 것이 자동으로 반영되나
 

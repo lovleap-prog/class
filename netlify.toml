@@ -1,0 +1,62 @@
+# 넷리파이 배포 설정
+#
+# 이 저장소에는 폴더가 둘 있다. 학교 교육활동 앱은 app/ 안에 있으므로
+# 그 폴더를 사이트의 뿌리로 삼는다. 그래야 주소가 .../app/ 없이 깔끔해진다.
+# 깃허브에 올리면 넷리파이가 알아서 다시 배포한다. 따로 할 일은 없다.
+
+[build]
+  publish = "app"
+  # 빌드 도구를 쓰지 않는다. 파일을 그대로 올리는 앱이라 command 가 없다.
+
+[build.processing]
+  # 넷리파이의 자동 압축을 끈다. ES 모듈과 동적 import 를 건드리면
+  # 파이어베이스 모듈을 못 불러오는 일이 생긴다.
+  skip_processing = true
+
+# ── 캐시 ──────────────────────────────────────────────────
+# 서비스워커와 첫 화면은 절대 오래 담아두면 안 된다.
+# 이 둘이 낡으면 앱을 고쳐 올려도 선생님 화면이 그대로다.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# 앱 코드도 매번 확인하게 둔다. 서비스워커가 '네트워크 우선' 이라
+# 여기서 오래 담아두면 새 판이 늦게 들어간다.
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# 아이콘은 잘 안 바뀌니 하루 담아둔다.
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# ── 보안 ──────────────────────────────────────────────────
+# 구글 로그인을 쓰는 앱이라 기본적인 것만 걸어 둔다.
+# CSP 는 넣지 않았다. 파이어베이스 SDK 를 바깥에서 받아오기 때문에
+# 잘못 조이면 로그인이 통째로 막힌다.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

@@ -55,6 +55,7 @@ cd app && python3 -m http.server 8000
 
 자세한 안내 → **[docs/START-LOCAL.md](docs/START-LOCAL.md)**
 학교 전체가 같이 쓰려면 → **[docs/SETUP-firebase.md](docs/SETUP-firebase.md)**
+인터넷에 올리려면 → **[docs/DEPLOY-netlify.md](docs/DEPLOY-netlify.md)**
 
 ## 문서
 
@@ -66,6 +67,7 @@ cd app && python3 -m http.server 8000
 | [공지·메모·학사일정·출장](docs/NOTES-MEMO-TRIPS.md) | 공지사항, 개인 메모, 학사일정, 출장 |
 | [구글시트 vs Firebase 선택](docs/CHOOSE-BACKEND.md) | 어느 쪽을 써야 하는지, 왜 그런지 |
 | [Firebase 설정](docs/SETUP-firebase.md) | 실시간 공유 + 보안 규칙 (30분) |
+| [넷리파이로 올리기](docs/DEPLOY-netlify.md) | 인터넷에 올려 주소로 공유 (10분, 명령어 없음) |
 | [구글시트 연동](docs/SETUP-sheets.md) | 담당자 자유 입력 → 자동 정리 |
 | [선생님용 설치 안내](docs/INSTALL-for-teachers.md) | 인쇄해서 나눠주는 용도 |
 | [한글 파일 내보내기](docs/HWP-EXPORT.md) | hwpx · HTML · 업로드 형식 |
