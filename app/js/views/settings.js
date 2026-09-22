@@ -79,6 +79,11 @@ export function renderSettings(ctx) {
   // ── 한글 문서 ──
   const fontIn = h('input', { class: 'input', value: cfg.hwp.font });
   const sizeIn = h('input', { class: 'input', type: 'number', min: '8', max: '20', value: String(cfg.hwp.fontSize) });
+  const groupIn = h('textarea', {
+    class: 'input mono', rows: 3, spellcheck: 'false',
+    placeholder: '도덕,과학,체육',
+  });
+  groupIn.value = (cfg.timetableGroups || []).join('\n');
 
   const fileIn = h('input', { type: 'file', class: 'sr-file', accept: '.json' });
   fileIn.addEventListener('change', async () => {
@@ -193,6 +198,15 @@ export function renderSettings(ctx) {
       field('글꼴', fontIn),
       field('글자 크기(pt)', sizeIn))),
 
+    box('교과교담 한 줄로 묶기', h('div', {},
+      h('p', { class: 'note' },
+        '[일일] 화면의 교과교담 표에서 한 자리에 세울 과목들입니다. ',
+        '전담 선생님 한 분이 도덕·과학·체육을 함께 맡으면 세 과목이 한 줄에 서야 읽기 좋습니다. ',
+        '쉼표로 묶고, 묶음이 여럿이면 줄을 바꿔 적으세요.'),
+      groupIn,
+      h('p', { class: 'muted small' },
+        '시간표 칸에 담당 선생님 이름을 적어 두었다면 그쪽이 먼저입니다. 같은 분이 맡은 것은 저절로 한 줄에 섭니다.'))),
+
     box('둘러보기용 예시 자료', h('div', {},
       h('p', { class: 'note' },
         '이번 주 일정·반복일정·방과후 강좌 예시를 한 번에 넣어 화면이 어떻게 보이는지 확인할 수 있습니다. ',
@@ -261,6 +275,7 @@ export function renderSettings(ctx) {
           }
           for (const k of fbFields) next.firebase[k] = fb[k].value.trim();
           next.hwp = { font: fontIn.value.trim() || '함초롬바탕', fontSize: Number(sizeIn.value) || 11 };
+          next.timetableGroups = groupIn.value.split('\n').map((x) => x.trim()).filter(Boolean);
 
           saveConfig(next);
           toast('저장했습니다.', 'ok');

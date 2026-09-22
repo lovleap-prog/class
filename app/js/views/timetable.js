@@ -16,6 +16,13 @@ import { makeDraggable } from '../dragmove.js';
 
 const DOWS = [1, 2, 3, 4, 5];
 
+// '기본 시간표' 는 어느 주에도 속하지 않는 한 벌이다. 주 이름 자리에 날짜 대신
+// 이 표를 넣어 같은 칸에 함께 둔다. 다른 곳은 모두 week 가 'YYYY-MM-DD' 인지로
+// 걸러 보기 때문에, 이 한 벌은 주간 화면·계획 문서 어디에도 새어 나가지 않는다.
+export const BASE_WEEK = 'base';
+const baseSlots = () => list('timetable').filter((s) => s.week === BASE_WEEK && s.title)
+  .sort((a, b) => a.dow - b.dow || a.period - b.period);
+
 // 복사해 둔 칸/요일. 화면을 다시 그려도 남아 있도록 모듈 수준에 둔다.
 let clip = null;   // { type:'cell'|'day', label, items:[{title,kind,target,place,owner,note,period?,dow?}] }
 
@@ -100,6 +107,11 @@ export function renderTimetable(ctx) {
           : h('span', { class: 'progress all-done' }, '중복 없음')),
       h('div', { class: 'datebar-actions' },
         admin ? h('button', { class: 'btn btn-primary', onClick: () => openImport(wk, refresh) }, '파일에서 가져오기') : null,
+        admin ? h('button', {
+          class: 'btn',
+          title: '해마다 바뀌지 않는 한 벌을 저장해 두고, 주마다 깔고 나서 고칩니다',
+          onClick: () => openBase(wk, refresh),
+        }, '\u{1F4CB} 기본 시간표') : null,
         admin ? h('button', { class: 'btn', onClick: () => copyWeek(wk, -7, refresh) }, '지난 주 복사') : null,
         admin && slots.length
           ? h('button', {
@@ -429,6 +441,79 @@ function openImport(wk, refresh) {
       },
     },
   ]);
+}
+
+/**
+ * 기본 시간표 — 한 벌을 저장해 두고 주마다 깔아 쓴다.
+ *
+ * 지난 주 복사는 연휴가 끼면 쓸모가 없다. 쉰 날의 빈 칸까지 그대로 따라온다.
+ * 학기 내내 크게 바뀌지 않는 한 벌을 따로 두고, 그것을 깔고 나서 그 주만 고치는 편이 낫다.
+ */
+function openBase(wk, refresh) {
+  const base = baseSlots();
+  const here = list('timetable').filter((s) => s.week === wk && s.title);
+
+  // 저장해 둔 한 벌을 요일별로 훑어 보여 준다. 무엇이 깔릴지 보고 누르라는 뜻이다.
+  const peek = base.length
+    ? h('div', { class: 'base-peek' }, ...DOWS.map((d) => {
+      const day = base.filter((s) => s.dow === d);
+      return h('div', { class: 'base-day' },
+        h('strong', {}, WEEKDAY[d]),
+        day.length
+          ? h('span', {}, day.map((s) => `${s.period}교시 ${s.title}`).join(' · '))
+          : h('span', { class: 'muted' }, '없음'));
+    }))
+    : h('p', { class: 'muted' },
+      '아직 저장해 둔 기본 시간표가 없습니다. 한 주를 제대로 짜 두고 [이 주를 기본으로 저장]을 누르세요.');
+
+  const body = h('div', {},
+    h('p', { class: 'muted small' },
+      '학기 내내 크게 바뀌지 않는 한 벌입니다. 주마다 깔고 나서 그 주에 달라진 것만 고치면 됩니다. ' +
+      '연휴가 낀 주를 복사할 때처럼 빈 칸이 따라오지 않습니다.'),
+    base.length ? h('h4', { class: 'base-title' }, `저장된 기본 시간표 ${base.length}칸`) : null,
+    peek);
+
+  openModal('기본 시간표', body, [
+    { label: '닫기', onClick: (c) => c() },
+    base.length ? {
+      label: '기본 지우기',
+      class: 'btn-danger',
+      onClick: async (close) => {
+        if (!(await confirmDialog(`저장해 둔 기본 시간표 ${base.length}칸을 지울까요? 이 주의 시간표는 그대로 둡니다.`,
+          { danger: true, okText: '지우기' }))) return;
+        for (const x of base) await remove('timetable', x.id);
+        toast('기본 시간표를 지웠습니다.', 'ok');
+        close(); refresh();
+      },
+    } : null,
+    {
+      label: '이 주를 기본으로 저장',
+      onClick: async (close) => {
+        if (!here.length) { toast('이 주에 저장할 시간표가 없습니다.', 'warn'); return; }
+        if (base.length && !(await confirmDialog(
+          `저장해 둔 기본 시간표 ${base.length}칸을 이 주(${here.length}칸)로 바꿀까요?`, { okText: '바꾸기' }))) return;
+        for (const x of base) await remove('timetable', x.id);
+        await putMany('timetable', here.map((x) => newSlot({ ...stripId(x), week: BASE_WEEK })));
+        await audit('기본시간표저장', wk, null, { count: here.length });
+        toast(`${here.length}칸을 기본 시간표로 저장했습니다.`, 'ok');
+        close(); refresh();
+      },
+    },
+    base.length ? {
+      label: '이 주에 깔기',
+      class: 'btn-primary',
+      onClick: async (close) => {
+        if (here.length && !(await confirmDialog(
+          `이 주에 이미 ${here.length}칸이 있습니다. 지우고 기본 시간표 ${base.length}칸을 깔까요?`,
+          { okText: '깔기' }))) return;
+        for (const x of list('timetable').filter((s) => s.week === wk)) await remove('timetable', x.id);
+        await putMany('timetable', base.map((x) => newSlot({ ...stripId(x), week: wk })));
+        await audit('기본시간표적용', wk, null, { count: base.length });
+        toast(`기본 시간표 ${base.length}칸을 깔았습니다. 이 주에 달라진 것만 고치세요.`, 'ok');
+        close(); refresh();
+      },
+    } : null,
+  ].filter(Boolean));
 }
 
 async function copyWeek(wk, offset, refresh) {

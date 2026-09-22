@@ -63,8 +63,9 @@ function headerXml(opt) {
     `<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>` +
     `<hh:refList>` +
     fontfaces(opt.font || '함초롬바탕', opt.fontLatin || '함초롬바탕') +
-    `<hh:borderFills itemCnt="2">` +
-      borderFill(1, 'NONE') + borderFill(2, 'SOLID') +
+    `<hh:borderFills itemCnt="${1 + BF_COMBOS.length}">` +
+      borderFill(1, { type: 'NONE' }) +
+      BF_COMBOS.map((k, i) => borderFill(BF_BASE + i, k)).join('') +
     `</hh:borderFills>` +
     charProperties(base) +
     `<hh:tabProperties itemCnt="1"><hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/></hh:tabProperties>` +
@@ -79,12 +80,37 @@ function headerXml(opt) {
     `</hh:head>`;
 }
 
-function borderFill(id, type) {
-  const line = (dir) => `<hh:${dir} type="${type}" width="0.12 mm" color="#000000"/>`;
+// 한 칸의 테두리·바탕 조합. 하루에 활동이 둘 이상이면 그 사이를 점선으로 끊고
+// 한 줄 걸러 옅은 바탕을 깔아, 어디까지가 같은 날인지 눈으로 바로 잡히게 한다.
+// 학교에서 쓰는 실제 주간계획 문서도 꼭 이 방식(DASH + winBrush)으로 되어 있다.
+const SHADE_COLOR = '#F2F2F2';
+const BF_BASE = 2;
+// 번호를 고정하려고 여덟 가지를 모두 미리 적어 둔다. 머리글은 본문과 따로 만들어지니
+// 쓰인 것만 골라 담을 수가 없다. 칸 하나가 고르는 번호는 bfIdOf() 가 같은 순서로 셈한다.
+const BF_COMBOS = [0, 1, 2, 3, 4, 5, 6, 7].map((n) => ({
+  type: 'SOLID',
+  dashTop: !!(n & 1),
+  dashBottom: !!(n & 2),
+  shade: !!(n & 4),
+}));
+
+/** 칸이 쓸 borderFill 번호. BF_COMBOS 의 차례와 반드시 같아야 한다. */
+export function bfIdOf(x) {
+  if (!x) return BF_BASE;
+  return BF_BASE + (x.dashTop ? 1 : 0) + (x.dashBottom ? 2 : 0) + (x.shade ? 4 : 0);
+}
+
+function borderFill(id, k) {
+  const line = (dir, type) => `<hh:${dir} type="${type}" width="0.12 mm" color="#000000"/>`;
+  const t = k.type || 'SOLID';
+  const fill = k.shade
+    ? `<hc:fillBrush><hc:winBrush faceColor="${SHADE_COLOR}" hatchColor="#999999" alpha="0"/></hc:fillBrush>`
+    : '';
   return `<hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">` +
     `<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>` +
-    line('leftBorder') + line('rightBorder') + line('topBorder') + line('bottomBorder') +
-    `<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/></hh:borderFill>`;
+    line('leftBorder', t) + line('rightBorder', t) +
+    line('topBorder', k.dashTop ? 'DASH' : t) + line('bottomBorder', k.dashBottom ? 'DASH' : t) +
+    `<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/>` + fill + `</hh:borderFill>`;
 }
 
 const LINESEG = '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="42520" flags="393216"/></hp:linesegarray>';
@@ -175,7 +201,7 @@ function tblXml(t, opt, id) {
     const inner = paras.map((line) =>
       `<hp:p id="2147483648" paraPrIDRef="${paraPr}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
       `<hp:run charPrIDRef="${charPr}"><hp:t>${esc(line)}</hp:t></hp:run>${LINESEG}</hp:p>`).join('');
-    return `<hp:tc name="" header="${isHead(r) ? 1 : 0}" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="2">` +
+    return `<hp:tc name="" header="${isHead(r) ? 1 : 0}" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bfIdOf(x)}">` +
       `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">` +
       inner + `</hp:subList>` +
       `<hp:cellAddr colAddr="${x.c}" rowAddr="${x.r}"/>` +
@@ -293,12 +319,21 @@ export async function buildHwpxDoc(blocks, opt = {}) {
   ]);
 }
 
-/** 칸 하나를 { t, rowSpan, colSpan, align } 꼴로 맞춘다. 글자만 준 경우도 받는다. */
+/**
+ * 칸 하나를 { t, rowSpan, colSpan, align, dashTop, dashBottom, shade } 꼴로 맞춘다.
+ * 글자만 준 경우도 받는다. dashTop·dashBottom 은 같은 날 안에서 활동을 끊는 점선,
+ * shade 는 한 줄 걸러 까는 옅은 바탕(주말·공휴일 칸에도 쓴다).
+ */
 export function cellOf(c) {
   if (c && typeof c === 'object') {
-    return { t: String(c.t == null ? '' : c.t), rowSpan: c.rowSpan || 1, colSpan: c.colSpan || 1, align: c.align || 'center' };
+    return {
+      t: String(c.t == null ? '' : c.t),
+      rowSpan: c.rowSpan || 1, colSpan: c.colSpan || 1, align: c.align || 'center',
+      dashTop: !!c.dashTop, dashBottom: !!c.dashBottom, shade: !!c.shade,
+    };
   }
-  return { t: String(c == null ? '' : c), rowSpan: 1, colSpan: 1, align: 'center' };
+  return { t: String(c == null ? '' : c), rowSpan: 1, colSpan: 1, align: 'center',
+    dashTop: false, dashBottom: false, shade: false };
 }
 
 /**
@@ -331,6 +366,9 @@ export function buildHtmlForHwp({
   th, td { border: 1px solid #000; padding: 3pt 4pt; font-size: ${(fontSize * 0.95).toFixed(0)}pt;
            text-align: center; vertical-align: middle; white-space: pre-wrap; word-break: break-word; }
   td.l { text-align: left; }
+  td.dt { border-top-style: dashed; }
+  td.db { border-bottom-style: dashed; }
+  td.sh { background: ${SHADE_COLOR}; }
   th { background: #eee; }
 </style></head>
 <body>
@@ -355,7 +393,9 @@ function tableHtml(t) {
   const cells = (r, tag) => r.map((c) => {
     const x = cellOf(c);
     const sp = (x.rowSpan > 1 ? ` rowspan="${x.rowSpan}"` : '') + (x.colSpan > 1 ? ` colspan="${x.colSpan}"` : '');
-    const cls = x.align === 'left' ? ' class="l"' : '';
+    const names = [x.align === 'left' ? 'l' : '', x.dashTop ? 'dt' : '',
+      x.dashBottom ? 'db' : '', x.shade ? 'sh' : ''].filter(Boolean);
+    const cls = names.length ? ` class="${names.join(' ')}"` : '';
     return `<${tag}${sp}${cls}>${esc(x.t).replace(/\n/g, '<br>') || '&nbsp;'}</${tag}>`;
   }).join('');
   const colgroup = (t.cols || []).length

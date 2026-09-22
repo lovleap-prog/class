@@ -8,6 +8,7 @@ import { activitiesOn, recurringOn, afterSchoolFor, dayBundle, clashesOn, timeta
 import { clashLabel, bellList, defaultBell, bellById, dayBellId, bellFor, describeTime } from '../conflict.js';
 import { openActivityForm } from '../ui/activityForm.js';
 import { openDayExport, openPeriodExport } from '../ui/exporter.js';
+import { loadConfig } from '../config.js';
 import { holidayOn } from '../lib/holidays.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
 import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
@@ -217,6 +218,29 @@ function slotStem(title) {
 }
 
 /**
+ * 한 칸이 설 '열'. 같은 열에 든 것끼리 세로로 줄이 선다.
+ *
+ * 1) 담당 선생님 이름이 적혀 있으면 그쪽이 먼저다. 한 분이 맡은 과목은 한 줄이다.
+ * 2) 이름이 없으면 [설정]의 묶음을 본다. 전담 한 분이 도덕·과학·체육을 함께 맡는 것이
+ *    보통인데, 칸마다 이름을 적어 두는 학교는 드물기 때문이다.
+ * 3) 그것도 아니면 과목 줄기대로 선다.
+ */
+function slotLane(s, groups) {
+  if (s.owner && String(s.owner).trim()) return `@${String(s.owner).trim()}`;
+  const stem = slotStem(s.title);
+  const g = groups.find((x) => x.names.has(stem));
+  return g ? `#${g.key}` : stem;
+}
+
+/** [설정]의 '도덕,과학,체육' 같은 줄을 찾아보기 쉬운 꼴로 바꾼다. */
+function laneGroups() {
+  return (loadConfig().timetableGroups || [])
+    .map((line) => String(line || '').split(',').map((x) => x.trim()).filter(Boolean))
+    .filter((xs) => xs.length > 1)
+    .map((xs) => ({ key: xs.join(','), names: new Set(xs) }));
+}
+
+/**
  * 교과교담·특별실 — 교시마다 한 줄, 같은 과목은 같은 자리.
  *
  * 전에는 칩을 쭉 늘어놓아 '1교시' 가 칸마다 되풀이됐다. 교시를 왼쪽에 한 번만
@@ -226,11 +250,13 @@ function slotStem(title) {
 function timetableGrid(slots, clash) {
   const periods = [...new Set(slots.map((s) => Number(s.period) || 0))].sort((a, b) => a - b);
 
+  const groups = laneGroups();
+
   // 열 차례 — 처음 나온 순서대로. 대개 특별실·교담이 쓰던 차례와 같다.
   const cols = [];
   for (const p of periods) {
     for (const s of slots.filter((x) => Number(x.period) === p)) {
-      const k = slotStem(s.title);
+      const k = slotLane(s, groups);
       if (!cols.includes(k)) cols.push(k);
     }
   }
@@ -252,7 +278,7 @@ function timetableGrid(slots, clash) {
       return h('div', { class: 'ttg-row' },
         h('span', { class: 'ttg-p' }, `${p}교시`),
         ...cols.map((k) => {
-          const here = mine.filter((x) => slotStem(x.title) === k);
+          const here = mine.filter((x) => slotLane(x, groups) === k);
           return h('span', { class: `ttg-cell${here.length ? '' : ' is-empty'}` }, ...here.map(chip));
         }));
     }));
@@ -368,7 +394,6 @@ export function renderDaily(ctx) {
   const after = afterSchoolFor(d);
   const slots = timetableOn(d);
   const clash = clashesOn(d);
-  const acad = academicOn(d);
   const trips = tripsOn(d);
   const myMemos = memosOn(d);
   const rerender = () => ctx.refresh();
@@ -408,13 +433,23 @@ export function renderDaily(ctx) {
     // 공지는 일일과 주간이 같은 것을 본다. 기간이 오늘에 걸치면 여기 뜬다.
     boardBox(d, d, { title: '공지사항', refresh: rerender }),
 
-    acad.length
-      ? h('section', { class: 'sec sec-acad' },
+    // 학사일정은 **이 화면에 아직 없는 것만** 띄운다.
+    // 학사일정을 올려 두면 같은 것이 교육활동으로도 들어와, 한 날에 두 번 적히기 때문이다.
+    // 공휴일은 위 띠가 이미 말하고 있으니 여기서 또 말하지 않는다.
+    (() => {
+      const bare = (t) => String(t || '').replace(/\s+/g, '').replace(/[(（].*$/, '');
+      const shown = new Set([...approved, ...pending, ...rejected, ...spans, ...rec, ...trips]
+        .map((x) => bare(x.title || x.reason)).filter(Boolean));
+      const off = holidayOn(d);
+      if (off) shown.add(bare(off));
+      const acad = academicOn(d).filter((a) => !shown.has(bare(a.title)));
+      if (!acad.length) return null;
+      return h('section', { class: 'sec sec-acad' },
         h('div', { class: 'sec-head' },
           h('h3', {}, '\u{1F4C5} 학사일정'),
           h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체')),
-        h('div', { class: 'chips' }, ...acad.map((a) => h('span', { class: 'acad-pill' }, a.title))))
-      : null,
+        h('div', { class: 'chips' }, ...acad.map((a) => h('span', { class: 'acad-pill' }, a.title))));
+    })(),
 
     clash.size
       ? h('section', { class: 'sec sec-clash' },
@@ -531,8 +566,8 @@ export function renderWeekly(ctx) {
           // 기간 일정은 위쪽 띠에 이미 나와 있으므로 칸 안에서는 뺀다
           ...b.activities.filter((a) => !isSpan(a)).map((a) => activityCard(a, { compact: true, onChange: rerender, checkDate: day })),
           // 매일 도는 반복일정은 주마다 스무 번씩 되풀이돼 피로하다.
-          // 반복일정 탭에서 '주간' 을 꺼둔 것은 여기서 뺀다(일일에는 그대로 나온다).
-          ...b.recurring.filter((a) => a.showInWeekly !== false)
+          // 반복일정 탭에서 '주간·월간' 을 꺼둔 것은 여기서 뺀다(일일에는 그대로 나온다).
+          ...b.recurring.filter((a) => a.showInPlan !== false)
             .map((a) => activityCard(a, { compact: true, checkDate: day })),
           b.afterSchool.length
             ? h('div', { class: 'mini-after' }, `방과후 ${b.afterSchool.length}강좌`)
@@ -587,7 +622,8 @@ export function renderMonthly(ctx) {
         h('div', { class: 'month-days' }, ...range(ws, we).map((day) => {
           const out = day.slice(0, 7) !== mm;
           const acts = activitiesOn(day).filter((a) => !isSpan(a));
-          const rec = recurringOn(day);
+          // 월간 칸의 '상시 N' 도 계획에 띄우기로 한 것만 센다.
+          const rec = recurringOn(day).filter((r) => r.showInPlan !== false);
           const off = holidayOn(day);
           const cell = h('button', {
             class: `month-cell${out ? ' is-out' : ''}${day === today() ? ' is-today' : ''}`

@@ -111,17 +111,24 @@ function afterSchoolTable(date) {
  */
 export function openPeriodExport(from, to, title, form = 'weekly') {
   const cfg = loadConfig();
-  const doc = form === 'monthly' ? monthlyForm(from) : weeklyForm(from, to);
+  // 주간은 두 판을 낸다. 교담 시간표가 붙은 온판과, 주요 교육활동만 있는 낱장이다.
+  // 시간표가 그 주에 바뀔 일이 없으면 굳이 같이 돌리지 않는 분들이 있어서다.
+  const full = form === 'monthly' ? monthlyForm(from) : weeklyForm(from, to);
+  const lite = form === 'monthly' ? null : weeklyForm(from, to, { timetable: false });
+  let doc = full;
   const margin = form === 'monthly' ? '15mm' : '10mm';
   const marginX = form === 'monthly' ? 4251 : 2834;
-  const fileName = `${(form === 'monthly' ? '월중교육활동계획' : '주간활동계획')}_${fileDate(from)}`;
+  const baseName = form === 'monthly' ? '월중교육활동계획' : '주간활동계획';
+  const fileName = () =>
+    `${baseName}${doc === lite ? '(주요활동)' : ''}_${fileDate(from)}`;
 
   const days = periodBundle(from, to).filter((d) => d.activities.length || d.recurring.length || d.afterSchool.length);
   const plain = periodText({ from, to, days, title });
 
   // 서식 미리보기 — 내려받기 전에 눈으로 확인하고 인쇄까지 여기서 한다.
   const sheet = h('div', { class: 'formdoc' });
-  sheet.innerHTML = renderBlocksHtml(doc.blocks);
+  const draw = () => { sheet.innerHTML = renderBlocksHtml(doc.blocks); };
+  draw();
   const preview = h('div', { class: 'formdoc-wrap' }, sheet);
 
   const out = h('textarea', { class: 'input mono', rows: 18, spellcheck: 'false' });
@@ -129,16 +136,18 @@ export function openPeriodExport(from, to, title, form = 'weekly') {
   const plainBox = h('div', { style: { display: 'none' } }, out,
     h('p', { class: 'muted small' }, '메신저·게시판에 붙일 때 쓰세요. 결재에는 왼쪽 [학교 서식]을 쓰십시오.'));
 
-  let mode = 0;
+  // 맨 끝 칸이 줄글, 그 앞이 서식이다.
+  const TABS = lite ? ['학교 서식', '주요 활동만', '줄글 요약'] : ['학교 서식', '줄글 요약'];
+  const plainIdx = TABS.length - 1;
   const seg = h('div', { class: 'seg' },
-    ...['학교 서식', '줄글 요약'].map((t, i) => h('button', {
+    ...TABS.map((t, i) => h('button', {
       class: `seg-btn${i === 0 ? ' on' : ''}`,
       onClick: (e) => {
-        mode = i;
         for (const b of e.currentTarget.parentNode.children) b.classList.remove('on');
         e.currentTarget.classList.add('on');
-        preview.style.display = i === 0 ? '' : 'none';
-        plainBox.style.display = i === 0 ? 'none' : '';
+        if (i < plainIdx) { doc = i === 0 ? full : lite; draw(); }
+        preview.style.display = i < plainIdx ? '' : 'none';
+        plainBox.style.display = i < plainIdx ? 'none' : '';
       },
     }, t)));
 
@@ -164,7 +173,7 @@ export function openPeriodExport(from, to, title, form = 'weekly') {
     {
       label: '한글용 HTML',
       onClick: () => {
-        download(`${fileName}.html`, new Blob([htmlDoc()], { type: 'text/html;charset=utf-8' }));
+        download(`${fileName()}.html`, new Blob([htmlDoc()], { type: 'text/html;charset=utf-8' }));
         toast('한글에서 [불러오기] → 파일 형식 "HTML 문서"로 열면 표째로 들어옵니다.', 'ok');
       },
     },
@@ -177,7 +186,7 @@ export function openPeriodExport(from, to, title, form = 'weekly') {
             title: doc.title, font: cfg.hwp.font, fontSize: cfg.hwp.fontSize,
             marginX, marginY: 2834,
           });
-          download(`${fileName}.hwpx`, blob);
+          download(`${fileName()}.hwpx`, blob);
           toast('내려받았습니다. 열리지 않으면 [한글용 HTML]을 쓰세요.', 'ok');
         } catch (e) {
           console.error(e);

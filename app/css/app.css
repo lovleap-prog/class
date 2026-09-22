@@ -787,6 +787,11 @@ body.dragging-now .band-grid { pointer-events: none; }
   white-space: pre-wrap; word-break: break-word;
 }
 .formdoc td.l { text-align: left; }
+/* 같은 날 안에서 활동이 갈리는 자리는 점선, 한 줄 걸러 옅은 바탕.
+   주말·공휴일 칸도 같은 바탕을 쓴다. 한글 서식과 맞춰 둔 것이다. */
+.formdoc td.dt { border-top-style: dashed; }
+.formdoc td.db { border-bottom-style: dashed; }
+.formdoc td.sh { background: #f2f2f2; }
 .formdoc th { background: #eee; font-weight: 700; }
 
 /* 인쇄: 화면은 통째로 감추고 서식만 종이에 올린다. 새 창을 띄우지 않아 휴대폰에서도 된다. */
@@ -815,6 +820,11 @@ body.dragging-now .band-grid { pointer-events: none; }
     text-align: center; vertical-align: middle; white-space: pre-wrap; word-break: break-word;
   }
   body.printing #print-area td.l { text-align: left; }
+  body.printing #print-area td.dt { border-top-style: dashed; }
+  body.printing #print-area td.db { border-bottom-style: dashed; }
+  body.printing #print-area td.sh {
+    background: #f2f2f2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
   body.printing #print-area th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.printing #print-area thead { display: table-header-group; }
   body.printing #print-area tr { break-inside: avoid; }
@@ -1159,3 +1169,15 @@ body.widget .widget-body { padding-bottom: 16px; }
 .fold-arrow { font-size: 9px; color: var(--muted); width: 12px; line-height: 1; }
 .fold-btn:hover .fold-arrow { color: var(--brand); }
 .sec-fold.is-closed .sec-head { margin-bottom: 0; }
+
+/* ── 기본 시간표 미리보기 ────────────────────────────────
+   무엇이 깔릴지 보고 누르라는 뜻이다. 요일 한 줄씩. */
+.base-title { margin: 14px 0 6px; font-size: 14px; }
+.base-peek { display: grid; gap: 4px; }
+.base-day {
+  display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: baseline;
+  padding: 6px 8px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 13px; line-height: 1.5;
+}
+.base-day > strong { color: var(--muted); }
+.base-day > span { word-break: keep-all; }

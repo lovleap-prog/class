@@ -8,6 +8,7 @@ import {
   WEEKDAY, fmtK, parseYmd, ymd, addDays, range, byTime, monthEnd, noticeId,
 } from '../model.js';
 import { describeTime } from '../conflict.js';
+import { holidayOn } from './holidays.js';
 import { activitiesOn, recurringOn } from '../select.js';
 import { loadConfig } from '../config.js';
 
@@ -48,6 +49,8 @@ function termOf(date) {
 function planRecurring(date) {
   return recurringOn(date).filter((r) => {
     if (r.includeInNeis === false) return false;
+    // 반복일정 탭에서 '주간·월간' 을 꺼둔 것은 계획 문서에도 넣지 않는다.
+    if (r.showInPlan === false) return false;
     if (r.freq === 'daily') return false;
     return (r.weekdays || []).length <= 4;
   });
@@ -103,6 +106,10 @@ function weekRowsOf(date, from) {
   for (const r of planRecurring(date).sort(byTime)) {
     out.push({ dept: r.dept, owner: r.owner, work: workText(r), time: timeCell(describeTime(r) || r.time), place: r.place });
   }
+  // 추석 연휴 같은 공휴일도 한 줄로 넣는다. 그 날이 통째로 빠지면
+  // 주간계획을 보는 사람이 '왜 목요일이 없지?' 하게 된다.
+  const off = holidayOn(date);
+  if (off) out.unshift({ dept: '', owner: '', work: off, time: '', place: '', off: true });
   // 출장은 실제 문서에도 '계 = 출장' 줄로 들어간다. 보결이 필요하면 그것까지 적어야
   // 주간계획을 보는 선생님이 대비할 수 있다.
   for (const t of list('trips')) {
@@ -137,14 +144,25 @@ function weekMainTable(from, to) {
     lastDay = d;
     const dt = parseYmd(d);
     const label = `${dt.getMonth() + 1}.${dt.getDate()}\n(${WEEKDAY[dt.getDay()]})`;
+    const many = items.length > 1;
+    const off = !!holidayOn(d);
     items.forEach((it, i) => {
+      // 한 요일에 여러 건이면 사이를 점선으로 긋고, 한 칸 걸러 옅게 깐다.
+      // 어디까지가 같은 날인지 눈으로 바로 갈라 보라는 뜻이다.
+      const dashTop = i > 0;                       // 그 날의 둘째 줄부터
+      const dashBottom = i < items.length - 1;     // 그 날의 마지막 줄만 빼고
+      const shade = (many && i % 2 === 1) || off;
+      const mark = (c) => (typeof c === 'object'
+        ? { ...c, dashTop, dashBottom, shade }
+        : { t: c, dashTop, dashBottom, shade });
       rows.push([
-        ...(i === 0 ? [{ t: label, rowSpan: items.length }] : []),
-        it.dept || '',
-        it.owner || '',
-        { t: it.work, align: 'left' },
-        it.time || '',
-        it.place || '',
+        // 날짜 칸은 그 날 전체를 세로로 덮으니 줄 걸러 깔지 않는다. 공휴일일 때만 깐다.
+        ...(i === 0 ? [{ t: label, rowSpan: items.length, shade: off }] : []),
+        mark(it.dept || ''),
+        mark(it.owner || ''),
+        mark({ t: it.work, align: 'left' }),
+        mark(it.time || ''),
+        mark(it.place || ''),
       ]);
     });
   }
@@ -189,7 +207,7 @@ function weekTimetable(from) {
  * 주간활동계획 한 부.
  * @returns {{ title:string, blocks:Array }}
  */
-export function weeklyForm(from, to) {
+export function weeklyForm(from, to, { timetable = true } = {}) {
   const cfg = loadConfig();
   const main = weekMainTable(from, to);
   // 학교 서식은 월~토가 한 주다. 일요일에 일정이 있을 때만 거기까지 늘린다.
@@ -203,7 +221,7 @@ export function weeklyForm(from, to) {
     { kind: 'table', table: main },
   ];
   if (notice) blocks.push({ kind: 'small', text: `※ ${notice.replace(/\n/g, ' ')}` });
-  if (!tt.empty) {
+  if (timetable && !tt.empty) {
     blocks.push({ kind: 'title', text: `${label} 교과교담` });
     blocks.push({ kind: 'body', text: `${parseYmd(from).getFullYear()}. ${termOf(from)}학기 교담 시간표` });
     blocks.push({ kind: 'table', table: tt });
@@ -261,11 +279,16 @@ export function monthlyForm(first) {
     ]
       .sort((x, y) => span(x) - span(y) || byTime(x, y))
       .map((a) => monthItemText(a));
+    // 주말(토·일)과 법정공휴일은 옅게 깔아 수업일과 갈라 보이게 한다.
+    const off = holidayOn(d);
+    const shade = dt.getDay() === 0 || dt.getDay() === 6 || !!off;
     rows.push([
-      String(dt.getDate()),
-      WEEKDAY[dt.getDay()],
-      { t: acts.join(', '), align: 'left' },
-      noMeal.has(d) ? '비급식일' : '',
+      { t: String(dt.getDate()), shade },
+      { t: WEEKDAY[dt.getDay()], shade },
+      // 공휴일 이름은 학사일정에 없더라도 앞세워 적는다.
+      { t: [off && !acts.some((x) => x.startsWith(off)) ? off : '', acts.join(', ')]
+        .filter(Boolean).join(', '), align: 'left', shade },
+      { t: noMeal.has(d) ? '비급식일' : '', shade },
     ]);
   }
 
