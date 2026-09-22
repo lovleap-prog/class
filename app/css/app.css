@@ -923,3 +923,6 @@ body.dragging-now .band-grid { pointer-events: none; }
 .acad-item.is-holiday .acad-title { color: var(--warn); font-weight: 600; }
 .chip-off { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
 .icon-btn.on { background: var(--warn-bg); border-color: var(--warn); }
+
+/* 이 컴퓨터에만 있는 링크가 남아 있을 때의 귀띔 */
+.warn-inline { color: var(--warn); font-weight: 600; }

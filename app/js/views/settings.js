@@ -9,6 +9,7 @@ import { insertSample, removeSample, hasSample } from '../sampledata.js';
 import { staffBox } from './staffbox.js';
 import { bellsBox } from './bellsbox.js';
 import { membersBox } from './membersbox.js';
+import { sharedLinksMeta, saveSharedLinks, hasSharedLinks, editableLinks, localLinks } from '../links.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -53,11 +54,13 @@ export function renderSettings(ctx) {
   // ── 바로가기 링크 (학교 노션 자료실 등) ──
   const linkRows = [];
   const linkBox = h('div', { class: 'link-rows' });
+  // 공용 방식에서 교사는 보기만 한다. 고치는 것은 관리자다.
+  const linksLocked = shared && !isAdmin();
   const addLinkRow = (link = { label: '', url: '' }) => {
-    const label = h('input', { class: 'input', value: link.label || '', placeholder: '예) 학교 자료실(노션)' });
-    const url = h('input', { class: 'input', value: link.url || '', placeholder: 'https://www.notion.so/...' });
+    const label = h('input', { class: 'input', value: link.label || '', placeholder: '예) 학교 자료실(노션)', disabled: linksLocked });
+    const url = h('input', { class: 'input', value: link.url || '', placeholder: 'https://www.notion.so/...', disabled: linksLocked });
     const row = h('div', { class: 'link-row' }, label, url,
-      h('button', {
+      linksLocked ? null : h('button', {
         class: 'icon-btn danger', title: '이 줄 삭제',
         onClick: () => { row.remove(); const i = linkRows.indexOf(entry); if (i >= 0) linkRows.splice(i, 1); },
       }, '\u2715'));
@@ -65,7 +68,12 @@ export function renderSettings(ctx) {
     linkRows.push(entry);
     linkBox.appendChild(row);
   };
-  ((cfg.links && cfg.links.length) ? cfg.links : [{ label: '', url: '' }]).forEach(addLinkRow);
+  // 학교 전체가 함께 쓰는 방식이면 공용 목록을 채운다(그게 모두에게 보이는 값이다).
+  const startLinks = editableLinks();
+  ((startLinks && startLinks.length) ? startLinks : [{ label: '', url: '' }]).forEach(addLinkRow);
+  const readLinkRows = () => linkRows
+    .map((r) => ({ label: r.label.value.trim(), url: r.url.value.trim() }))
+    .filter((l) => l.url);
 
   // ── 한글 문서 ──
   const fontIn = h('input', { class: 'input', value: cfg.hwp.font });
@@ -136,12 +144,44 @@ export function renderSettings(ctx) {
         '머리말 오른쪽에 버튼으로 걸립니다. 학교 노션 자료실, 업무포털 주소 등을 넣으세요. ',
         '새 창에서 열리며, ', h('strong', {}, '접근 권한이 없는 분은 그쪽에서 막히므로'),
         ' 링크가 보이는 것 자체는 문제되지 않습니다.'),
+      shared && !isAdmin()
+        ? h('p', { class: 'muted small' }, '관리자가 정한 링크입니다.')
+        : null,
       linkBox,
-      h('div', { class: 'row gap' },
-        h('button', { class: 'btn btn-sm', onClick: () => addLinkRow() }, '+ 줄 추가')),
-      h('p', { class: 'muted small' },
-        '여기서 넣은 값은 이 컴퓨터에만 저장됩니다. 모든 선생님에게 똑같이 보이게 하려면 ',
-        h('code', {}, 'app/js/config.js'), ' 의 ', h('code', {}, 'links'), ' 를 고쳐 배포하세요.'))),
+      (!shared || isAdmin())
+        ? h('div', { class: 'row gap' },
+          h('button', { class: 'btn btn-sm', onClick: () => addLinkRow() }, '+ 줄 추가'),
+          shared
+            ? h('button', {
+              class: 'btn btn-sm btn-primary',
+              onClick: async () => {
+                try {
+                  await saveSharedLinks(readLinkRows());
+                  toast('모든 선생님에게 보이도록 저장했습니다.', 'ok');
+                  ctx.refresh();
+                } catch (e) {
+                  console.error(e);
+                  toast('저장하지 못했습니다: ' + (e.message || ''), 'warn');
+                }
+              },
+            }, '모두에게 보이게 저장')
+            : null)
+        : null,
+      shared
+        ? h('p', { class: 'muted small' },
+          '여기 넣은 링크는 ', h('strong', {}, '모든 선생님 화면에 똑같이'), ' 보입니다. ',
+          '[모두에게 보이게 저장] 을 누르면 바로 반영되고, 다시 배포할 필요가 없습니다.',
+          (() => {
+            const m = sharedLinksMeta();
+            return m && m.by ? ` (마지막 수정: ${m.by})` : '';
+          })(),
+          !hasSharedLinks() && localLinks().length
+            ? h('span', { class: 'warn-inline' },
+              ' 이 컴퓨터에 있던 링크를 채워두었습니다. 저장을 누르면 모두에게 올라갑니다.')
+            : null)
+        : h('p', { class: 'muted small' },
+          '여기서 넣은 값은 이 컴퓨터에만 저장됩니다. 모든 선생님에게 똑같이 보이게 하려면 ',
+          h('code', {}, 'app/js/config.js'), ' 의 ', h('code', {}, 'links'), ' 를 고쳐 배포하세요.'))),
 
     box('시정표 (기본 · 단축 · 수업공개)', bellsBox(ctx)),
 
@@ -210,10 +250,11 @@ export function renderSettings(ctx) {
           next.backend = backendSel.value;
           next.schoolId = fb.schoolId.value.trim() || 'default';
           next.googleHostedDomain = fb.hd.value.trim();
-          next.links = linkRows
-            .map((r) => ({ label: r.label.value.trim(), url: r.url.value.trim() }))
-            .filter((l) => l.url)
-            .map((l) => ({ label: l.label || l.url.replace(/^https?:\/\//, '').slice(0, 24), url: l.url }));
+          // 공용 방식에서는 링크가 학교 목록으로 가므로 이 컴퓨터 값은 건드리지 않는다.
+          if (!shared) {
+            next.links = readLinkRows()
+              .map((l) => ({ label: l.label || l.url.replace(/^https?:\/\//, '').slice(0, 24), url: l.url }));
+          }
           for (const k of fbFields) next.firebase[k] = fb[k].value.trim();
           next.hwp = { font: fontIn.value.trim() || '함초롬바탕', fontSize: Number(sizeIn.value) || 11 };
 

@@ -1,6 +1,7 @@
 // 앱 진입점 — 탭 전환, 헤더, 첫 실행 안내, 위젯 모드
 import { h, mount, clear, toast, openModal, confirmDialog } from './lib/dom.js';
 import { loadConfig } from './config.js';
+import { effectiveLinks } from './links.js';
 import {
   initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind,
   signIn, signOut, needsSignIn, isApproved,
@@ -149,7 +150,7 @@ function header(opt = {}) {
         h('strong', {}, cfg.school.name || '학교 교육활동'),
         h('span', { class: 'sub' }, '일일 · 주간 · 월간 교육활동'))),
     h('div', { class: 'top-right' },
-      ...(bare ? [] : linkButtons(cfg)),
+      ...(bare ? [] : linkButtons()),
       h('span', { class: `conn ${backendKind()}` },
         backendKind() === 'firestore' ? '실시간 공유' : '이 컴퓨터 저장'),
       ...(bare ? [] : [
@@ -220,9 +221,8 @@ function userMenu(me) {
  * 접근 권한이 없는 분에게도 그냥 보여준다 — 눌러도 그쪽에서 막히기 때문에
  * 굳이 숨길 이유가 없고, 권한 있는 분이 찾기 쉬운 편이 낫다.
  */
-function linkButtons(cfg) {
-  return (cfg.links || [])
-    .filter((l) => l && l.url)
+function linkButtons() {
+  return effectiveLinks()
     .map((l) => h('a', {
       class: 'link-btn',
       href: l.url,
@@ -305,7 +305,7 @@ function renderWidget() {
           h('ul', {}, ...b.afterSchool.map((p) => h('li', {}, `${p.time || ''} ${p.name}${p.room ? ` (${p.room})` : ''}`))))
         : null),
     h('div', { class: 'widget-foot' },
-      ...linkButtons(cfg).slice(0, 1),
+      ...linkButtons().slice(0, 1),
       h('button', { class: 'btn btn-sm', onClick: () => openDayExport(state.date) }, '결재문구'),
       h('button', {
         class: 'btn btn-sm',
