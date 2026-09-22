@@ -982,3 +982,10 @@ body.dragging-now .band-grid { pointer-events: none; }
   border-radius: 999px; background: var(--panel-2); color: var(--muted);
   font-size: 12px; font-weight: 700;
 }
+
+/* 공지 — 바로 적는 칸 (자유 메모). 창을 열지 않고 한 줄 적어 붙인다. */
+.quick-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+.quick-note { flex: 1; resize: none; overflow: hidden; min-height: 38px; line-height: 1.5; }
+.quick-row .btn { flex: 0 0 auto; margin-top: 3px; }
+.post-range.is-always { color: var(--ok); }
+.form-grid.nested { padding: 0; margin: 0; }

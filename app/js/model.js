@@ -180,6 +180,7 @@ export function newPost(partial = {}) {
     text: '',
     from: today(),
     to: today(),
+    always: false,           // 기간 없이 계속 붙여둘 것인가 (자유 메모)
     pinned: false,           // 위로 올려 둘 것인가
     by: '', uid: '',         // 쓴 사람 (이름 / 로그인 식별자)
     at: new Date().toISOString(),
