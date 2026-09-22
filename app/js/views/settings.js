@@ -1,11 +1,14 @@
 // 설정 탭 — 사용자, 학교 정보, 저장 방식, 백업/복원, 설치 안내
 import { h, toast, confirmDialog, download, clear } from '../lib/dom.js';
 import { loadConfig, saveConfig, resetConfig } from '../config.js';
-import { currentUser, setUser, exportAll, importAll, backendKind, list } from '../store.js';
+import {
+  currentUser, setUser, exportAll, importAll, backendKind, list, isAdmin, signOut,
+} from '../store.js';
 import { ROLE } from '../model.js';
 import { insertSample, removeSample, hasSample } from '../sampledata.js';
 import { staffBox } from './staffbox.js';
 import { bellsBox } from './bellsbox.js';
+import { membersBox } from './membersbox.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -14,6 +17,10 @@ const field = (label, input, hint) =>
 export function renderSettings(ctx) {
   const cfg = loadConfig();
   const me = currentUser();
+  // 학교 전체가 함께 쓰는 방식에서는 이름·역할이 구글 계정과 명단에서 온다.
+  // 여기서 고칠 수 있게 두면, 스스로 '관리자' 로 바꿔 놓고 왜 저장이 안 되는지
+  // 헤매게 된다(규칙이 막으므로 실제로 되지는 않는다).
+  const shared = backendKind() === 'firestore';
 
   // ── 사용자 ──
   const nameIn = h('input', { class: 'input', value: me.name || '', placeholder: '예) 김민수' });
@@ -80,11 +87,29 @@ export function renderSettings(ctx) {
   const counts = ['activities', 'recurring', 'afterschool', 'audit'].map((c) => `${labelOf(c)} ${list(c).length}`).join(' · ');
 
   return h('div', { class: 'view view-narrow' },
-    box('내 정보', h('div', { class: 'form-grid' },
-      field('이름 *', nameIn, '결재 문구와 이력에 이 이름이 쓰입니다.'),
-      field('부서/계', deptIn),
-      h('div', { class: 'span2' }, field('역할', roleSel,
-        '관리자만 승인·반려·오기재 수정을 할 수 있습니다.')))),
+    box('내 정보', shared
+      ? h('div', {},
+          h('div', { class: 'form-grid' },
+            field('이름', h('input', { class: 'input', value: me.name || '', disabled: true })),
+            field('계정', h('input', { class: 'input', value: me.email || '', disabled: true })),
+            h('div', { class: 'span2' }, field('역할',
+              h('input', {
+                class: 'input',
+                value: me.role === 'admin' ? ROLE.admin : ROLE.teacher,
+                disabled: true,
+              })))),
+          h('p', { class: 'muted small' },
+            '이름과 역할은 구글 계정과 학교 명단에서 옵니다. 바꾸시려면 관리자에게 말씀하세요.'),
+          h('div', { class: 'row gap' },
+            h('button', {
+              class: 'btn btn-sm',
+              onClick: async () => { await signOut(); },
+            }, '로그아웃')))
+      : h('div', { class: 'form-grid' },
+          field('이름 *', nameIn, '결재 문구와 이력에 이 이름이 쓰입니다.'),
+          field('부서/계', deptIn),
+          h('div', { class: 'span2' }, field('역할', roleSel,
+            '관리자만 승인·반려·오기재 수정을 할 수 있습니다.')))),
 
     box('학교 정보', h('div', { class: 'form-grid' },
       field('학교명', schoolIn),
@@ -98,6 +123,11 @@ export function renderSettings(ctx) {
         ' — ', counts),
       fbBox,
       h('p', { class: 'muted small' }, '저장 위치를 바꾸면 새로 고침해야 적용됩니다. 설정 방법은 docs/SETUP-firebase.md 를 보세요.'))),
+
+    // 명단은 관리자에게만. 교사 화면에 남의 계정을 늘어놓을 이유가 없다.
+    isAdmin() && backendKind() === 'firestore'
+      ? box(`명단 · 승인 (${list('members').filter((m) => !m.approved).length}명 대기)`, membersBox(ctx))
+      : null,
 
     box('담당자 자동 매칭 (업무분장표 · 과거 계획 학습)', staffBox(ctx)),
 
@@ -170,8 +200,11 @@ export function renderSettings(ctx) {
       h('button', {
         class: 'btn btn-primary',
         onClick: () => {
-          if (!nameIn.value.trim()) return toast('이름을 입력해 주세요.', 'warn');
-          setUser({ name: nameIn.value.trim(), dept: deptIn.value.trim(), role: roleSel.value });
+          // 함께 쓰는 방식에서는 이름·역할이 명단에서 오므로 여기서 건드리지 않는다.
+          if (!shared) {
+            if (!nameIn.value.trim()) return toast('이름을 입력해 주세요.', 'warn');
+            setUser({ name: nameIn.value.trim(), dept: deptIn.value.trim(), role: roleSel.value });
+          }
           const next = loadConfig();
           next.school = { name: schoolIn.value.trim(), principal: principalIn.value.trim(), contact: contactIn.value.trim() };
           next.backend = backendSel.value;

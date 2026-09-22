@@ -48,112 +48,130 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function member(school) {
-      return get(/databases/$(database)/documents/schools/$(school)/members/$(request.auth.uid)).data;
-    }
-    function isAdmin(school) {
-      return request.auth != null && member(school).role == 'admin';
-    }
     function signedIn() { return request.auth != null; }
 
+    function memberPath(school) {
+      return /databases/$(database)/documents/schools/$(school)/members/$(request.auth.uid);
+    }
+    function member(school) { return get(memberPath(school)).data; }
+
+    // 로그인만으로는 아무것도 못 본다. 관리자가 명단에서 승인해야 열린다.
+    // 선생님들이 개인 지메일·다음 메일을 쓰면 구글 도메인으로 막을 수가 없어서,
+    // '로그인했으면 통과' 로 두면 주소를 아는 사람이 아무 계정으로 들어와
+    // 출장 사유와 업무분장까지 다 보게 된다.
+    function ok(school) {
+      return signedIn() && exists(memberPath(school)) && member(school).approved == true;
+    }
+    function isAdmin(school) { return ok(school) && member(school).role == 'admin'; }
+
     match /schools/{school}/members/{uid} {
-      allow read: if signedIn();
-      // 첫 로그인 때 본인 문서만 만들 수 있고, 역할은 teacher 로 고정
+      // 자기 문서는 늘 읽을 수 있어야 한다. 그래야 '승인 대기' 화면을 띄운다.
+      allow get: if signedIn() && request.auth.uid == uid;
+      // 남의 것까지 보는 건 승인된 사람만
+      allow read: if ok(school);
+      // 첫 로그인: 본인 문서만, 교사로, 승인 안 된 상태로만 만들 수 있다.
+      // approved 를 스스로 true 로 넣지 못하게 막는 것이 이 줄의 핵심이다.
       allow create: if signedIn() && request.auth.uid == uid
-                    && request.resource.data.role == 'teacher';
-      // 역할 변경은 관리자만
-      allow update, delete: if isAdmin(school);
+                    && request.resource.data.role == 'teacher'
+                    && request.resource.data.approved == false;
+      // 승인·역할 변경은 관리자만.
+      // 본인은 이름·부서만 고칠 수 있고 role 과 approved 는 건드리지 못한다.
+      allow update: if isAdmin(school)
+                    || (signedIn() && request.auth.uid == uid
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.approved == resource.data.approved);
+      allow delete: if isAdmin(school);
     }
 
     match /schools/{school}/activities/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       // 교사는 '확인 대기' 상태로만 올릴 수 있다
-      allow create: if signedIn() &&
+      allow create: if ok(school) &&
         (isAdmin(school) || request.resource.data.status == 'pending');
       // 승인/반려와 남의 글 수정은 관리자만.
       // 교사는 아직 대기 중인 '자기 글'만 고칠 수 있다.
       allow update: if isAdmin(school) ||
-        (signedIn()
+        (ok(school)
          && resource.data.status == 'pending'
          && request.resource.data.status == 'pending'
          && resource.data.createdBy == member(school).name);
       allow delete: if isAdmin(school) ||
-        (signedIn() && resource.data.status == 'pending'
+        (ok(school) && resource.data.status == 'pending'
          && resource.data.createdBy == member(school).name);
     }
 
     // 반복일정 · 방과후 시간표는 관리자만 고친다
     match /schools/{school}/recurring/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/afterschool/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
 
     // 개인 확인 체크 — 문서 id 가 그 사람의 uid 다.
     // 읽기도 본인만. 앱도 컬렉션 전체가 아니라 본인 문서 하나만 구독한다.
     match /schools/{school}/checks/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read, write: if ok(school) && request.auth.uid == uid;
     }
 
     // 개인 메모 — 문서 id 가 그 사람의 uid 다. 본인만 읽고 쓴다.
     match /schools/{school}/memos/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read, write: if ok(school) && request.auth.uid == uid;
     }
 
     // 공지사항 · 월별 중점지도 · 학사일정 · 시정표 — 읽기는 모두, 쓰기는 관리자만
     match /schools/{school}/notices/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/academic/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/bells/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/daybell/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/timetable/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
 
     // 출장 — 본인이 신청하고, 승인·반려는 관리자만
     match /schools/{school}/trips/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn() &&
+      allow read: if ok(school);
+      allow create: if ok(school) &&
         (isAdmin(school) || request.resource.data.status == 'pending');
       allow update: if isAdmin(school) ||
-        (signedIn()
+        (ok(school)
          && resource.data.status == 'pending'
          && request.resource.data.status == 'pending'
          && resource.data.applicant == member(school).name);
       allow delete: if isAdmin(school) ||
-        (signedIn() && resource.data.status == 'pending'
+        (ok(school) && resource.data.status == 'pending'
          && resource.data.applicant == member(school).name);
     }
 
     // 업무분장 · 학습 사례 — 읽기는 모두, 쓰기는 관리자만
     match /schools/{school}/staff/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
     match /schools/{school}/lessons/{id} {
-      allow read: if signedIn();
+      allow read: if ok(school);
       allow write: if isAdmin(school);
     }
 
     // 이력은 남기기만 하고 고치지 못하게
     match /schools/{school}/audit/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn();
+      allow read: if ok(school);
+      allow create: if ok(school);
       allow update, delete: if false;
     }
   }
@@ -189,12 +207,40 @@ const DEFAULTS = {
 };
 ```
 
-## 7. 관리자 지정
+## 7. 첫 관리자 지정 (한 번만 콘솔에서)
 
-1. 선생님이 먼저 앱에 들어가 구글 로그인을 합니다. → `members` 컬렉션에 본인 문서가 생깁니다.
+명단 승인제라서 **맨 처음 한 사람은 콘솔에서 직접 열어줘야 합니다.** 그 뒤로는 앱에서 다 됩니다.
+
+1. 선생님이 먼저 앱에 들어가 **구글 로그인**을 합니다.
+   → 화면에 `승인을 기다리고 있습니다` 가 뜨고, `members` 컬렉션에 본인 문서가 생깁니다.
 2. Firebase 콘솔 → Firestore → `schools/default/members/{본인 uid}` 문서를 열어
-   `role` 값을 `teacher` → **`admin`** 으로 바꿉니다.
-3. 앱을 새로 고치면 승인함이 열립니다. 이후 다른 관리자는 앱에서 추가하지 말고 같은 방법으로 지정하세요.
+   **두 값을 고칩니다.**
+
+   | 필드 | 바꿀 값 |
+   |---|---|
+   | `role` | `teacher` → **`admin`** |
+   | `approved` | `false` → **`true`** (불리언) |
+
+3. 앱 화면이 **새로 고치지 않아도** 곧바로 열립니다. 문서를 계속 지켜보고 있기 때문입니다.
+
+이제부터 다른 선생님은 **[설정] 탭 → 명단 · 승인** 에서 승인하시면 됩니다. 콘솔에 다시 들어갈 일이 없습니다.
+
+## 7-1. 선생님들 승인하기
+
+선생님이 앱 주소를 열고 구글 로그인을 하면 `대기` 로 명단에 올라옵니다.
+그 상태에서는 **학교 자료를 한 줄도 내려받지 않습니다.** 구독 자체를 시작하지 않습니다.
+
+관리자는 **[설정] 탭 → 명단 · 승인** 에서
+
+- **[승인]** — 이 사람에게 자료를 연다. 누르는 즉시 그분 화면이 열린다(새로 고침 불필요)
+- **[관리자로]** — 승인함(결재) 권한까지 준다
+- **[승인 취소]** — 그 즉시 자료가 안 보인다. 전근 가신 분 정리에 쓴다
+
+> **모르는 이름이면 승인하지 마세요.** 주소만 알면 누구나 로그인까지는 할 수 있습니다.
+> 막는 것은 로그인이 아니라 이 승인입니다.
+
+자기 자신은 승인 취소나 역할 변경을 할 수 없게 막아 두었습니다.
+관리자가 실수로 혼자 잠기면 아무도 풀어줄 수 없기 때문입니다.
 
 ## 8. 배포
 
@@ -266,6 +312,46 @@ const VERSION = 'v2';   // → 'v3' 으로
 
 보안 규칙은 앱 파일과 **따로** 갑니다. 규칙을 고쳤으면 콘솔에서 [게시] 를 눌러야 합니다.
 
+## 누가 볼 수 있나 — 명단 승인제
+
+선생님들이 **개인 지메일·다음 메일**을 쓰시면 구글 도메인(`goe.go.kr` 등)으로 문을 막을 수가 없습니다.
+그때 '로그인했으면 통과' 로 두면 이렇게 됩니다.
+
+```
+모르는 사람이 주소를 앎 → 아무 지메일로 로그인 → 출장 사유·업무분장까지 다 보임
+```
+
+그래서 로그인 뒤에 **승인**을 한 단계 더 두었습니다.
+
+| 상태 | 볼 수 있는 것 |
+|---|---|
+| 로그인 안 함 | 없음. 로그인 화면만 |
+| 로그인함 · 승인 대기 | **없음.** '승인을 기다리고 있습니다' 화면만 |
+| 승인됨 | 학교 자료 전부 |
+| 승인됨 · 관리자 | + 승인함(결재), 명단 관리 |
+
+승인 전에는 화면만 가리는 것이 아니라 **구독 자체를 시작하지 않습니다.**
+개발자 도구를 열어도 자료가 한 줄도 오지 않습니다.
+보안 규칙에서도 모든 자료에 `approved == true` 를 걸어두었기 때문에,
+앱을 거치지 않고 직접 요청해도 거부됩니다.
+
+`approved` 를 스스로 `true` 로 만들 수 없게 규칙에 못 박아 두었습니다.
+
+```
+allow create: if signedIn() && request.auth.uid == uid
+              && request.resource.data.role == 'teacher'
+              && request.resource.data.approved == false;
+```
+
+> 학교 구글 계정(Workspace)을 쓰시는 학교라면 `config.js` 의 `googleHostedDomain` 에
+> 도메인을 적어 **한 겹 더** 막을 수 있습니다. 승인제와 같이 써도 됩니다.
+
+### 다음 메일만 쓰시는 분
+
+구글 로그인은 **구글 계정**이 있어야 합니다. 다음 메일 주소로 구글 계정을 만들어 두셨다면
+그대로 되지만, 안 만드신 분은 로그인이 안 됩니다.
+그런 분은 구글 계정을 하나 만드시거나(무료), 개인 지메일로 들어오시면 됩니다.
+
 ## 개인 확인 체크에 대해
 
 일일교육활동의 체크박스는 일정 문서를 건드리지 않고 `checks` 컬렉션에 사람별로 따로 저장합니다.
@@ -281,6 +367,9 @@ const VERSION = 'v2';   // → 'v3' 으로
 
 ## 점검
 
+- 선생님 계정으로 로그인했을 때 **'승인을 기다리고 있습니다'** 가 뜨는지
+- 관리자가 [설정] → 명단 · 승인 에서 승인하면 그분 화면이 **새로 고침 없이** 열리는지
+- 승인 전에 개발자 도구를 열어 자료가 안 오는지 (와야 정상이 아닙니다)
 - 선생님 컴퓨터와 휴대전화에서 각각 열어 같은 일정이 보이는지
 - 교사 계정으로 등록했을 때 **확인 대기**로 들어가는지
 - 관리자 계정에서 승인하면 교사 화면이 **새로 고치지 않아도** 바뀌는지

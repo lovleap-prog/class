@@ -11,10 +11,12 @@ export const COLLECTIONS = [
   'academic', // 학사일정 (1학기 / 2학기)
   'trips',    // 출장 신청
   'memos',    // 개인 메모. 사람마다 문서 하나. 본인만 읽는다.
+  'members',  // 로그인한 사람 명단. 승인 전에는 아무것도 못 본다. (Firestore 전용)
 ];
 
 let backend = null;
-let user = { name: '', role: 'teacher', dept: '', email: '' };
+// approved: 관리자가 명단에서 승인했는가. 로컬 저장에서는 늘 참이다(혼자 쓰는 것이므로).
+let user = { name: '', role: 'teacher', dept: '', email: '', uid: '', approved: true };
 
 export function currentUser() { return user; }
 export function setUser(u) {
@@ -31,7 +33,10 @@ export function loadSavedUser() {
   return user;
 }
 
-export const isAdmin = () => user.role === 'admin';
+export const isAdmin = () => user.role === 'admin' && user.approved !== false;
+
+/** 자료를 볼 수 있는 사람인가. 승인 전에는 화면을 잠근다. */
+export const isApproved = () => user.approved !== false;
 
 // ── 이벤트 버스 ─────────────────────────────────────────────
 const listeners = new Map();
@@ -58,6 +63,26 @@ export async function initStore(cfg) {
 }
 
 export function backendKind() { return backend ? backend.kind : 'none'; }
+
+// ── 로그인 (Firestore 일 때만 뜻이 있다) ─────────────────────
+/** 구글 로그인 창을 연다. */
+export async function signIn() {
+  if (backend && backend.signIn) return backend.signIn();
+  throw new Error('이 저장 방식에는 로그인이 없습니다.');
+}
+export async function signOut() {
+  if (backend && backend.signOut) return backend.signOut();
+}
+/** 로그인해야 하는 방식인데 아직 로그인하지 않았는가 */
+export function needsSignIn() {
+  return !!(backend && backend.signedIn) && !backend.signedIn();
+}
+/** 명단의 한 사람을 고친다(승인·역할). 관리자만. */
+export async function setMember(uid2, patch) {
+  if (!backend || !backend.setMember) throw new Error('이 저장 방식에는 명단이 없습니다.');
+  await backend.setMember(uid2, patch);
+  emit('members');
+}
 
 // ── 데이터 API ─────────────────────────────────────────────
 export function list(col) { return backend.list(col); }
@@ -102,7 +127,9 @@ function slim(o) {
 }
 
 /** 백업 대상. 개인 체크(checks)는 사람마다 다른 값이라 백업에 넣지 않는다. */
-export const BACKUP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'checks' && c !== 'memos');
+// 명단(members)도 뺀다. 로그인 계정에 딸린 것이라 백업 파일로 옮길 성질이 아니다.
+export const BACKUP_COLLECTIONS = COLLECTIONS.filter(
+  (c) => c !== 'checks' && c !== 'memos' && c !== 'members');
 
 /** 업무분장표를 통째로 갈아끼운다. */
 export async function replaceAllStaff(docs) {

@@ -1,7 +1,10 @@
 // 앱 진입점 — 탭 전환, 헤더, 첫 실행 안내, 위젯 모드
 import { h, mount, clear, toast, openModal } from './lib/dom.js';
 import { loadConfig } from './config.js';
-import { initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind } from './store.js';
+import {
+  initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind,
+  signIn, signOut, needsSignIn, isApproved,
+} from './store.js';
 import { today, fmtK, weekStart, addDays, monthStart, monthEnd } from './model.js';
 import { renderDaily, renderWeekly, renderMonthly } from './views/schedule.js';
 import { renderRecurring } from './views/recurring.js';
@@ -72,7 +75,8 @@ async function boot() {
   readHash();
   render();
   // 위젯(작은 창)은 보기 전용이라 이름을 묻지 않는다.
-  if (!isWidget && !currentUser().name) setTimeout(askName, 300);
+  // 학교 전체가 함께 쓰는 방식에서는 이름·역할이 구글 로그인과 명단에서 오므로 묻지 않는다.
+  if (!isWidget && backendKind() !== 'firestore' && !currentUser().name) setTimeout(askName, 300);
   registerSW();
 }
 
@@ -111,11 +115,13 @@ function askName() {
   setTimeout(() => nameIn.focus(), 50);
 }
 
-function header() {
+/** @param {{bare?:boolean}} opt  bare 면 탭과 개인 단추를 감춘다(로그인·승인 대기 화면). */
+function header(opt = {}) {
   cfg = loadConfig();
   const me = currentUser();
+  const bare = !!opt.bare;
   const from = monthStart(state.date), to = monthEnd(state.date);
-  const pend = countPendingInRange(from, to);
+  const pend = bare ? 0 : countPendingInRange(from, to);
 
   return h('header', { class: 'top' },
     h('div', { class: 'brand' },
@@ -124,19 +130,21 @@ function header() {
         h('strong', {}, cfg.school.name || '학교 교육활동'),
         h('span', { class: 'sub' }, '일일 · 주간 · 월간 교육활동'))),
     h('div', { class: 'top-right' },
-      ...linkButtons(cfg),
+      ...(bare ? [] : linkButtons(cfg)),
       h('span', { class: `conn ${backendKind()}` },
         backendKind() === 'firestore' ? '실시간 공유' : '이 컴퓨터 저장'),
-      memoButton(),
-      h('button', {
-        class: 'btn btn-sm', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
-        onClick: openWidget,
-      }, '위젯 창'),
-      h('button', {
-        class: 'user-btn', title: '설정',
-        onClick: () => ctx.go('settings'),
-      }, `${me.name || '이름 설정'}${isAdmin() ? ' · 관리자' : ''}`)),
-    h('nav', { class: 'tabs' },
+      ...(bare ? [] : [
+        memoButton(),
+        h('button', {
+          class: 'btn btn-sm', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
+          onClick: openWidget,
+        }, '위젯 창'),
+        h('button', {
+          class: 'user-btn', title: '설정',
+          onClick: () => ctx.go('settings'),
+        }, `${me.name || '이름 설정'}${isAdmin() ? ' · 관리자' : ''}`),
+      ])),
+    bare ? null : h('nav', { class: 'tabs' },
       ...TABS.map(([key, label]) => h('button', {
         class: `tab${state.tab === key ? ' on' : ''}`,
         onClick: () => ctx.go(key),
@@ -245,8 +253,60 @@ function renderWidget() {
 function render() {
   syncHash();
   if (isWidget) { mount(app, renderWidget()); return; }
+  // 학교 전체가 함께 쓰는 방식일 때는 로그인과 승인을 먼저 지난다.
+  const gate = authGate();
+  if (gate) { mount(app, header({ bare: true }), h('main', { class: 'main' }, gate)); return; }
+
   const tab = TABS.find(([k]) => k === state.tab) || TABS[0];
   mount(app, header(), h('main', { class: 'main' }, tab[2](ctx)), memoDock());
+}
+
+/**
+ * 로그인·승인 관문. 통과할 게 없으면 null 을 돌려준다.
+ *
+ * 선생님들이 개인 메일을 쓰면 구글 도메인으로 막을 수가 없다.
+ * 그래서 '로그인했으면 통과' 대신 '관리자가 명단에서 승인해야 통과' 로 한다.
+ * 승인 전에는 자료를 한 줄도 내려받지 않는다(구독 자체를 시작하지 않는다).
+ */
+function authGate() {
+  if (backendKind() !== 'firestore') return null;
+  const u = currentUser();
+
+  if (needsSignIn()) {
+    return h('div', { class: 'gate' },
+      h('div', { class: 'gate-card' },
+        h('div', { class: 'gate-ico' }, '\u{1F3EB}'),
+        h('h2', {}, `${cfg.school.name || '학교'} 교육활동`),
+        h('p', { class: 'muted' }, '선생님 구글 계정으로 로그인해 주세요.'),
+        h('button', {
+          class: 'btn btn-primary btn-lg',
+          onClick: async (e) => {
+            e.currentTarget.disabled = true;
+            try { await signIn(); }
+            catch (err) {
+              console.error(err);
+              toast('로그인에 실패했습니다: ' + (err.message || err.code || ''), 'warn');
+              e.currentTarget.disabled = false;
+            }
+          },
+        }, '구글 계정으로 로그인'),
+        h('p', { class: 'muted small' },
+          '처음 오신 분은 로그인 뒤 관리자 승인을 기다리셔야 합니다.')));
+  }
+
+  if (!isApproved()) {
+    return h('div', { class: 'gate' },
+      h('div', { class: 'gate-card' },
+        h('div', { class: 'gate-ico' }, '\u{23F3}'),
+        h('h2', {}, '승인을 기다리고 있습니다'),
+        h('p', {}, h('b', {}, u.name || u.email), ' 님으로 로그인했습니다.'),
+        h('p', { class: 'muted' },
+          '관리자가 명단에서 승인하면 바로 열립니다. 새로 고치지 않으셔도 됩니다.'),
+        h('p', { class: 'muted small' },
+          '승인 전에는 학교 자료를 전혀 내려받지 않습니다.'),
+        h('button', { class: 'btn', onClick: () => signOut() }, '다른 계정으로 로그인')));
+  }
+  return null;
 }
 
 function registerSW() {

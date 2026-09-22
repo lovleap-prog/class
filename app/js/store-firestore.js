@@ -23,6 +23,9 @@ export async function createFirestoreBackend(cfg) {
   const cache = Object.fromEntries(COLLECTIONS.map((c) => [c, []]));
   let firstLoad;
   let stopChecks = null;   // 개인 체크 구독 해제 함수
+  let stopMe = null;       // 내 명단 문서 구독 해제 함수
+  let stopShared = [];     // 공용 자료 구독 해제 함수들
+  let watching = false;    // 공용 자료를 지금 보고 있는가
 
   // 개인 체크는 남이 읽을 수 없어야 하므로 컬렉션 전체가 아니라 '내 문서 하나'만 구독한다.
   // (파이어스토어는 권한 없는 문서가 섞일 수 있는 질의를 통째로 거부하기 때문에,
@@ -48,54 +51,110 @@ export async function createFirestoreBackend(cfg) {
     await authMod.signInWithPopup(auth, provider);
   }
 
+  /**
+   * 로그인한 사람의 명단 문서를 만들고, 그 문서를 계속 지켜본다.
+   *
+   * 학교 구글 도메인으로 막을 수 없는 경우(선생님들이 개인 메일을 쓰는 경우)가 많다.
+   * 그래서 '로그인했으면 통과' 로 두면 주소를 아는 사람이 아무 구글 계정으로 들어와
+   * 출장 사유와 업무분장까지 다 보게 된다. 그래서 승인을 한 단계 둔다.
+   *
+   * 지켜보는 이유는, 관리자가 승인하는 순간 대기 화면이 새로 고침 없이 열리게 하기 위해서다.
+   */
   async function resolveMember(u) {
-    // schools/{id}/members/{uid} 문서의 role 로 권한을 정한다.
     const ref = dbMod.doc(db, 'schools', schoolId, 'members', u.uid);
     const snap = await dbMod.getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    if (!data) {
-      // 최초 로그인: 대기 상태로 등록해 두고 관리자가 역할을 부여한다.
+    if (!snap.exists()) {
+      // 최초 로그인. approved:false 로 넣는다. 규칙이 스스로 승인하는 것을 막는다.
       await dbMod.setDoc(ref, {
         email: u.email || '', name: u.displayName || u.email || '',
-        role: 'teacher', dept: '', joinedAt: new Date().toISOString(),
+        role: 'teacher', dept: '', approved: false,
+        joinedAt: new Date().toISOString(),
       });
     }
-    setUser({
-      uid: u.uid,
-      email: u.email || '',
-      name: (data && data.name) || u.displayName || u.email || '',
-      role: (data && data.role) || 'teacher',
-      dept: (data && data.dept) || '',
+
+    if (stopMe) { stopMe(); stopMe = null; }
+    return new Promise((done) => {
+      let first = true;
+      stopMe = dbMod.onSnapshot(ref, (s2) => {
+        const d = s2.exists() ? s2.data() : null;
+        const approved = !!(d && d.approved);
+        setUser({
+          uid: u.uid,
+          email: u.email || '',
+          name: (d && d.name) || u.displayName || u.email || '',
+          role: (d && d.role) || 'teacher',
+          dept: (d && d.dept) || '',
+          approved,
+        });
+        // 승인되면 그때 공용 자료를 구독한다. 승인 전에 구독하면 규칙에 막혀
+        // 오류만 쌓이고, 화면에 보일 것도 없다.
+        if (approved) startShared(); else stopSharedWatch();
+        emit('auth');
+        if (first) { first = false; done(); }
+      }, (err) => {
+        console.error('[firestore] members', err);
+        if (first) { first = false; done(); }
+      });
     });
   }
 
   authMod.onAuthStateChanged(auth, async (u) => {
-    if (u) { await resolveMember(u); watchMyChecks(u.uid); emit('auth'); }
-    else { setUser({ uid: '', role: 'teacher' }); watchMyChecks(null); emit('auth'); }
+    if (u) {
+      await resolveMember(u);
+      watchMyChecks(u.uid);
+    } else {
+      if (stopMe) { stopMe(); stopMe = null; }
+      stopSharedWatch();
+      setUser({ uid: '', role: 'teacher', name: '', dept: '', email: '', approved: false });
+      watchMyChecks(null);
+      emit('auth');
+    }
   });
 
-  function watch() {
-    // checks 는 로그인이 끝난 뒤 watchMyChecks() 가 따로 구독한다.
+  /**
+   * 공용 자료 구독을 켠다. 승인된 뒤에만 부른다.
+   * checks 와 memos 는 본인 문서만 봐야 하므로 여기서 빼고 따로 구독한다.
+   */
+  function startShared() {
+    if (watching) return;
+    watching = true;
     const shared = COLLECTIONS.filter((c) => c !== 'checks');
-    const waits = shared.map((c) => new Promise((res) => {
-      let done = false;
-      dbMod.onSnapshot(base(c), (snap) => {
+    for (const c of shared) {
+      const stop = dbMod.onSnapshot(base(c), (snap) => {
         cache[c] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         emit(c);
-        if (!done) { done = true; res(); }
-      }, (err) => {
-        console.error('[firestore]', c, err);
-        if (!done) { done = true; res(); }
-      });
-    }));
-    return Promise.all(waits);
+      }, (err) => console.error('[firestore]', c, err));
+      stopShared.push(stop);
+    }
+  }
+
+  function stopSharedWatch() {
+    if (!watching) return;
+    watching = false;
+    for (const stop of stopShared) stop();
+    stopShared = [];
+    for (const c of COLLECTIONS) if (c !== 'checks') cache[c] = [];
+    for (const c of COLLECTIONS) emit(c);
+  }
+
+  /** 로그인 상태가 정해질 때까지 기다린다. 첫 화면을 잘못 그리지 않으려는 것이다. */
+  function firstAuth() {
+    return new Promise((res) => {
+      const stop = authMod.onAuthStateChanged(auth, () => { stop(); res(); });
+    });
   }
 
   return {
     kind: 'firestore',
     signIn,
     signOut: () => authMod.signOut(auth),
-    async ready() { firstLoad = watch(); await firstLoad; },
+    // 로그인 여부가 정해질 때까지만 기다린다. 자료는 승인된 뒤에 들어온다.
+    async ready() { firstLoad = firstAuth(); await firstLoad; },
+    signedIn: () => !!auth.currentUser,
+    /** 명단 승인/역할 바꾸기 — 관리자만. 규칙이 한 번 더 막는다. */
+    async setMember(uid2, patch) {
+      await dbMod.setDoc(dbMod.doc(db, 'schools', schoolId, 'members', uid2), patch, { merge: true });
+    },
     list(c) { return cache[c] || []; },
     async put(c, doc) {
       const { id, ...rest } = doc;
