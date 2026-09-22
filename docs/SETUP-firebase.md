@@ -82,7 +82,6 @@ service cloud.firestore {
                     && request.resource.data.role == 'teacher'
                     && request.resource.data.approved == false;
       // 승인·역할 변경은 관리자만.
-      // 본인은 이름·부서만 고칠 수 있고 role 과 approved 는 건드리지 못한다.
       // 본인은 이름·부서만. role·approved·canNotice 는 스스로 올리지 못한다.
       allow update: if isAdmin(school)
                     || (signedIn() && request.auth.uid == uid
