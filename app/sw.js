@@ -3,7 +3,7 @@
 //
 // VERSION 은 고칠 때마다 올린다. 올리면 옛 캐시를 통째로 버리고 새로 받는다.
 // 안 올리면 학교 컴퓨터에 낡은 파일이 남아 '내 화면만 다르다' 는 일이 생긴다.
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE = `sam-${VERSION}`;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
@@ -13,7 +13,7 @@ const ASSETS = [
   './js/lib/xlsx-read.js', './js/lib/textparse.js', './js/lib/ttparse.js', './js/lib/neis.js',
   './js/ui/activityForm.js', './js/ui/exporter.js',
   './js/views/schedule.js', './js/views/recurring.js', './js/views/afterschool.js',
-  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js', './js/views/staffbox.js', './js/views/bellsbox.js', './js/views/notice.js', './js/views/membersbox.js', './js/views/memoview.js', './js/views/academic.js', './js/views/trips.js', './js/memo.js', './js/links.js', './js/lib/acadparse.js',
+  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js', './js/views/staffbox.js', './js/views/bellsbox.js', './js/views/notice.js', './js/views/board.js', './js/views/membersbox.js', './js/views/memoview.js', './js/views/academic.js', './js/views/trips.js', './js/memo.js', './js/links.js', './js/lib/acadparse.js',
   './icons/icon-192.png', './icons/icon-512.png',
 ];
 

@@ -48,7 +48,9 @@ export function membersBox(ctx) {
       h('td', {}, m.approved
         ? h('span', { class: 'chip chip-ok' }, '승인됨')
         : h('span', { class: 'chip chip-wait' }, '대기')),
-      h('td', {}, m.role === 'admin' ? h('span', { class: 'chip chip-admin' }, '관리자') : '교사'),
+      h('td', {}, m.role === 'admin'
+        ? h('span', { class: 'chip chip-admin' }, '관리자')
+        : (m.canNotice ? h('span', { class: 'chip chip-notice' }, '공지') : '교사')),
       h('td', { class: 'small muted' }, fmtWhen(m.joinedAt)),
       h('td', { class: 'row gap nowrap' },
         m.approved
@@ -76,6 +78,18 @@ export function membersBox(ctx) {
                 { role: m.role === 'admin' ? 'teacher' : 'admin' },
                 m.role === 'admin' ? '교사로 바꿨습니다.' : '관리자로 바꿨습니다.'),
             }, m.role === 'admin' ? '교사로' : '관리자로')
+          : null,
+        // 관리자가 아니어도 공지는 쓰게 할 수 있다. 교무행정사가 공문 접수·
+        // 안내장 수합을 담임께 알리는 일은 그분이 하는 게 맞다.
+        m.approved && m.role !== 'admin'
+          ? h('button', {
+              class: `btn btn-sm${m.canNotice ? ' on' : ''}`,
+              title: m.canNotice
+                ? '공지 권한을 거둡니다'
+                : '이 분도 공지를 쓸 수 있게 합니다 (일정 승인 권한은 주지 않습니다)',
+              onClick: () => change(m, { canNotice: !m.canNotice },
+                m.canNotice ? '공지 권한을 거뒀습니다.' : '공지를 쓸 수 있게 했습니다.'),
+            }, m.canNotice ? '공지 끄기' : '공지 권한')
           : null));
   };
 
@@ -84,6 +98,11 @@ export function membersBox(ctx) {
       '처음 로그인한 분은 ', h('b', {}, '대기'), ' 상태로 들어옵니다. ',
       '승인하기 전에는 학교 자료를 ', h('b', {}, '한 줄도 내려받지 않습니다.'),
       ' 모르는 이름이면 승인하지 마세요.'),
+    h('p', { class: 'note' },
+      h('b', {}, '[공지 권한]'), ' 은 교무행정사처럼 ',
+      '공문 접수·안내장 수합을 알려야 하는 분께 주세요. ',
+      '공지만 쓸 수 있고 ', h('b', {}, '일정 승인·수정 권한은 생기지 않습니다.'),
+      ' 관리자는 따로 주지 않아도 공지를 씁니다.'),
 
     waiting.length
       ? h('p', { class: 'warn-line' }, `⏳ ${waiting.length}분이 승인을 기다리고 있습니다.`)

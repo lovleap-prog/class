@@ -64,6 +64,13 @@ service cloud.firestore {
     }
     function isAdmin(school) { return ok(school) && member(school).role == 'admin'; }
 
+    // 공지는 관리자 말고도 '공지 권한' 을 받은 사람이 쓴다.
+    // 공문 접수·안내장 수합을 담임께 알리는 일은 교무행정사가 하기 때문이다.
+    // 일정 승인 권한은 여기에 딸려 오지 않는다.
+    function canPost(school) {
+      return ok(school) && (member(school).role == 'admin' || member(school).canNotice == true);
+    }
+
     match /schools/{school}/members/{uid} {
       // 자기 문서는 늘 읽을 수 있어야 한다. 그래야 '승인 대기' 화면을 띄운다.
       allow get: if signedIn() && request.auth.uid == uid;
@@ -76,10 +83,13 @@ service cloud.firestore {
                     && request.resource.data.approved == false;
       // 승인·역할 변경은 관리자만.
       // 본인은 이름·부서만 고칠 수 있고 role 과 approved 는 건드리지 못한다.
+      // 본인은 이름·부서만. role·approved·canNotice 는 스스로 올리지 못한다.
       allow update: if isAdmin(school)
                     || (signedIn() && request.auth.uid == uid
                         && request.resource.data.role == resource.data.role
-                        && request.resource.data.approved == resource.data.approved);
+                        && request.resource.data.approved == resource.data.approved
+                        && request.resource.data.get('canNotice', false)
+                           == resource.data.get('canNotice', false));
       allow delete: if isAdmin(school);
     }
 
@@ -156,6 +166,15 @@ service cloud.firestore {
       allow delete: if isAdmin(school) ||
         (ok(school) && resource.data.status == 'pending'
          && resource.data.applicant == member(school).name);
+    }
+
+    // 공지 — 관리자와 '공지 권한' 받은 사람이 올린다.
+    // 남의 공지를 고치거나 내리는 것은 관리자만. 자기 것은 본인도 한다.
+    match /schools/{school}/board/{id} {
+      allow read: if ok(school);
+      allow create: if canPost(school) && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin(school)
+                            || (canPost(school) && resource.data.uid == request.auth.uid);
     }
 
     // 업무분장 · 학습 사례 — 읽기는 모두, 쓰기는 관리자만

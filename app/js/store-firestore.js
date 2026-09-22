@@ -84,6 +84,7 @@ export async function createFirestoreBackend(cfg) {
           name: (d && d.name) || u.displayName || u.email || '',
           role: (d && d.role) || 'teacher',
           dept: (d && d.dept) || '',
+          canNotice: !!(d && d.canNotice),
           approved,
         });
         // 승인되면 그때 공용 자료를 구독한다. 승인 전에 구독하면 규칙에 막혀
@@ -105,7 +106,7 @@ export async function createFirestoreBackend(cfg) {
     } else {
       if (stopMe) { stopMe(); stopMe = null; }
       stopSharedWatch();
-      setUser({ uid: '', role: 'teacher', name: '', dept: '', email: '', approved: false });
+      setUser({ uid: '', role: 'teacher', name: '', dept: '', email: '', approved: false, canNotice: false });
       watchMyChecks(null);
       emit('auth');
     }

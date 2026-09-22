@@ -943,3 +943,42 @@ body.dragging-now .band-grid { pointer-events: none; }
 
 /* 이 컴퓨터에만 있는 링크가 남아 있을 때의 귀띔 */
 .warn-inline { color: var(--warn); font-weight: 600; }
+
+/* ── 공지 게시 (일일·주간 공용) ──────────────────────── */
+.post-list { display: flex; flex-direction: column; gap: 8px; }
+.post {
+  border: 1px solid var(--line); border-left: 3px solid var(--brand);
+  border-radius: 8px; padding: 10px 12px; background: var(--panel);
+}
+.post.is-pinned { border-left-color: var(--warn); background: var(--warn-bg); }
+.post-body { white-space: pre-wrap; line-height: 1.55; }
+.post-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line);
+  font-size: 12.5px; color: var(--muted);
+}
+.post-range { font-weight: 600; color: var(--text); }
+.post-tools { margin-left: auto; display: flex; gap: 2px; }
+.chip-notice {
+  display: inline-block; padding: 1px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap; border: none;
+  background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok);
+}
+.btn.on { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+
+/* 게시가 끝난 공지 — 연장할지 묻는 자리 */
+.post-stale {
+  background: var(--warn-bg); border: 1px solid var(--warn);
+  border-radius: 8px; padding: 9px 12px; margin-bottom: 10px;
+  font-size: 13px; font-weight: 600; color: var(--warn);
+}
+.post-stale-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 7px; font-weight: 400; color: var(--text);
+}
+.post-stale-text { font-weight: 600; margin-right: auto; }
+.sec-count {
+  display: inline-block; margin-left: 6px; padding: 0 7px;
+  border-radius: 999px; background: var(--panel-2); color: var(--muted);
+  font-size: 12px; font-weight: 700;
+}

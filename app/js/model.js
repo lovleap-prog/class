@@ -168,6 +168,26 @@ export function newBell(partial = {}) {
 /** 공지사항 · 월별 중점지도 — kind 로 구분하고 key(날짜/주/월)마다 한 장 */
 export function noticeId(kind, key) { return `${kind}_${key}`; }
 
+/**
+ * 공지 한 장. 날짜마다 따로 쓰지 않고 '언제부터 언제까지' 붙여 둔다.
+ *
+ * 공문 접수나 안내장 수합처럼 며칠 이어지는 알림이 많다. 전에는 일일과 주간이
+ * 각각 따로여서 같은 말을 두 번 써야 했다. 이제 기간이 걸치는 날에 모두 뜬다.
+ */
+export function newPost(partial = {}) {
+  return {
+    id: uid('pst'),
+    text: '',
+    from: today(),
+    to: today(),
+    pinned: false,           // 위로 올려 둘 것인가
+    by: '', uid: '',         // 쓴 사람 (이름 / 로그인 식별자)
+    at: new Date().toISOString(),
+    extendedTo: '',          // 마지막으로 연장한 날짜. 연장 이력 한 줄.
+    ...partial,
+  };
+}
+
 /** 학사일정 한 줄 */
 export function newAcademic(partial = {}) {
   return {

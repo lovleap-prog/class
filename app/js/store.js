@@ -12,11 +12,12 @@ export const COLLECTIONS = [
   'trips',    // 출장 신청
   'memos',    // 개인 메모. 사람마다 문서 하나. 본인만 읽는다.
   'members',  // 로그인한 사람 명단. 승인 전에는 아무것도 못 본다. (Firestore 전용)
+  'board',    // 공지 — 기간을 정해 붙여 둔다. 관리자와 '공지 권한' 받은 사람이 쓴다.
 ];
 
 let backend = null;
 // approved: 관리자가 명단에서 승인했는가. 로컬 저장에서는 늘 참이다(혼자 쓰는 것이므로).
-let user = { name: '', role: 'teacher', dept: '', email: '', uid: '', approved: true };
+let user = { name: '', role: 'teacher', dept: '', email: '', uid: '', approved: true, canNotice: false };
 
 export function currentUser() { return user; }
 export function setUser(u) {
@@ -37,6 +38,13 @@ export const isAdmin = () => user.role === 'admin' && user.approved !== false;
 
 /** 자료를 볼 수 있는 사람인가. 승인 전에는 화면을 잠근다. */
 export const isApproved = () => user.approved !== false;
+
+/**
+ * 공지를 쓸 수 있는가.
+ * 관리자 말고도, 교무행정사처럼 관리자가 따로 권한을 준 사람이 쓴다.
+ * 공문 접수·안내장 수합을 담임 선생님들께 알리는 일은 그분들이 하기 때문이다.
+ */
+export const canPost = () => isApproved() && (user.role === 'admin' || user.canNotice === true);
 
 // ── 이벤트 버스 ─────────────────────────────────────────────
 const listeners = new Map();

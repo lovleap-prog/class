@@ -13,6 +13,7 @@ import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
 import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
 import { makeDraggable, makeDropTarget, canMove } from '../dragmove.js';
 import { noticeBox } from './notice.js';
+import { boardBox } from './board.js';
 import { memoPanel, memoComposer } from './memoview.js';
 import { memosOn, memosBetween } from '../memo.js';
 import { academicOn } from './academic.js';
@@ -331,11 +332,8 @@ export function renderDaily(ctx) {
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
       : null,
 
-    noticeBox('notice', d, {
-      title: '공지사항',
-      placeholder: '오늘 교직원에게 알릴 내용을 적으세요.',
-      onChange: rerender,
-    }),
+    // 공지는 일일과 주간이 같은 것을 본다. 기간이 오늘에 걸치면 여기 뜬다.
+    boardBox(d, d, { title: '공지사항', refresh: rerender }),
 
     acad.length
       ? h('section', { class: 'sec sec-acad' },
@@ -425,11 +423,7 @@ export function renderWeekly(ctx) {
         h('button', { class: 'btn', onClick: () => openPeriodExport(from, to, '주간활동계획', 'weekly') }, '주간활동계획 내보내기'),
       ],
     }),
-    noticeBox('notice', from, {
-      title: '이번 주 공지사항',
-      placeholder: '이번 주에 교직원이 알아야 할 내용을 적으세요.',
-      onChange: rerender,
-    }),
+    boardBox(from, to, { title: '이번 주 공지사항', refresh: rerender }),
 
     (() => {
       const mine = memosBetween(from, to);
