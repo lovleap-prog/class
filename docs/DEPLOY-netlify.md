@@ -25,10 +25,23 @@ https://app.netlify.com → **Sign up** → **GitHub** 로 가입합니다.
 
 ## 2. 저장소 연결
 
-1. **Add new site** → **Import an existing project**
-2. **Deploy with GitHub** → 저장소 `class` 선택
-   - 목록에 안 보이면 *Configure the Netlify app on GitHub* 을 눌러 이 저장소에 권한을 주세요
-3. 설정 화면이 나오는데 **아무것도 건드리지 마세요.**
+가입하면 **Projects** 화면이 바로 열립니다. 이 화면이 곧 '사이트 추가' 화면입니다.
+(넷리파이가 이름을 바꾸면서 예전의 *Add new site* 단추는 없어졌습니다.)
+
+화면을 반쯤 내려 **`Bringing your own code?` → `Import a Git repository`** 줄에서
+**[GitHub]** 을 누릅니다.
+
+> 맨 위의 **Start building with an AI agent** 상자는 무시하세요.
+> 코드를 새로 지어주는 기능인데 우리는 이미 만들어 둔 코드가 있습니다.
+>
+> 맨 아래 **Upload your project files**(끌어다 놓기)도 쓰지 마세요.
+> 그걸로 올리면 깃허브와 연결이 안 돼서 **자동 배포가 안 됩니다.**
+> 고칠 때마다 손으로 다시 올려야 합니다.
+
+1. 깃허브 권한을 묻습니다 → **Authorize / Install**
+2. 저장소 목록에서 **`class`** 선택
+   - 안 보이면 *Configure the Netlify app on GitHub* 을 눌러 이 저장소에 권한을 주세요
+3. 설정 화면이 나옵니다. **`Branch to deploy` 만 확인**하고 나머지는 건드리지 마세요.
    저장소에 `netlify.toml` 이 있어서 다음이 자동으로 잡힙니다.
 
    | 항목 | 값 | 왜 |
@@ -36,11 +49,15 @@ https://app.netlify.com → **Sign up** → **GitHub** 로 가입합니다.
    | Publish directory | `app` | 앱이 그 폴더에 있습니다. 주소에 `/app/` 이 안 붙습니다 |
    | Build command | (없음) | 빌드 도구를 쓰지 않는 앱입니다 |
 
+   `Branch to deploy` 는 0번에서 정한 가지로 맞춰 주세요.
+   `main` 에 아직 안 합쳤다면 작업 가지를 고르면 됩니다.
+
 4. **Deploy** 를 누르면 1분쯤 뒤 `random-name-12345.netlify.app` 주소가 나옵니다.
 
 ## 3. 주소 바꾸기
 
-**Site configuration → Site details → Change site name**
+**Project configuration → Project details → Change site name**
+(넷리파이가 이름을 바꾸는 중이라 화면에 따라 *Site configuration* 으로 보이기도 합니다)
 
 `ourschool-plan` 처럼 적으면 `https://ourschool-plan.netlify.app` 이 됩니다.
 선생님들께 안내할 주소이니 짧고 기억하기 쉬운 것으로 하세요.
