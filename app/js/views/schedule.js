@@ -57,10 +57,13 @@ export function activityCard(a, { compact = false, onChange, checkDate = '', sho
       h('div', { class: 'card-title-row' },
         h('span', { class: 'card-title' }, a.title),
         a.isRecurring ? h('span', { class: 'badge st-rec' }, '상시') : statusBadge(a, { showAll: showStatus }),
+        a.needsBus ? h('span', { class: 'badge st-bus', title: a.busNote || '배차 필요' }, '\u{1F68C} 배차') : null,
         a.endDate ? h('span', { class: 'badge st-span' }, `~ ${fmtK(a.endDate, { year: false })}`) : null),
       chips.length ? h('div', { class: 'chips' }, ...chips.map((c) => h('span', { class: 'chip' }, c))) : null,
       clash ? h('p', { class: 'clash-note' }, '\u26A0 ', clashLabel(clash)) : null,
-      !compact && a.detail ? h('p', { class: 'card-detail' }, a.detail) : null,
+      // 비고는 좁은 칸에서도 보여준다. '1-5교시 · 6-5-3-4-6년 순' 처럼
+      // 시간 표기만으로는 알 수 없는 내용이 여기 들어가기 때문이다.
+      a.detail ? h('p', { class: `card-detail${compact ? ' is-compact' : ''}` }, a.detail) : null,
       !compact && a.status === 'rejected' && a.rejectReason
         ? h('p', { class: 'card-reject' }, `반려 사유: ${a.rejectReason}`) : null),
     !a.isRecurring && canEdit
@@ -524,15 +527,45 @@ export function renderMonthly(ctx) {
             off ? h('span', { class: 'month-off', title: off }, off) : null,
             lanes ? h('span', { class: 'month-bandspace' }) : null,
             ...acts.slice(0, 3).map((a) => makeDraggable(h('span', {
-              class: `month-item cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}`,
-              title: canMove(a) ? `${a.title} — 끌어서 옮기기` : a.title,
-            }, a.title), a)),
+              class: `month-item cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}`
+                + `${a.needsBus ? ' needs-bus' : ''}`,
+              title: a.needsBus
+                ? `${a.title} — 배차 필요: ${a.busNote || '(내용 없음)'}`
+                : (canMove(a) ? `${a.title} — 끌어서 옮기기` : a.title),
+            }, a.needsBus ? h('span', { class: 'bus-dot' }, '\u{1F68C}') : null, a.title), a)),
             acts.length > 3 ? h('span', { class: 'month-more' }, `+${acts.length - 3}`) : null,
             rec.length ? h('span', { class: 'month-rec' }, `상시 ${rec.length}`) : null);
           return makeDropTarget(cell, day);
         })),
         bandGrid(bands, { compact: true, onClick: (a) => goDay(a.date) }));
     }),
+
+    // 배차가 필요한 활동만 따로 모은다.
+    // 교무행정사가 한 달 치를 미리 보고 신청해야 하므로, 달력 칸만으로는 부족하다.
+    (() => {
+      const bus = range(first, last)
+        .flatMap((d) => activitiesOn(d).filter((a) => a.needsBus && a.date === d))
+        .sort((x, y) => x.date.localeCompare(y.date));
+      if (!bus.length) return null;
+      return h('section', { class: 'sec sec-bus' },
+        h('div', { class: 'sec-head' },
+          h('h3', {}, '\u{1F68C} 배차가 필요한 교육활동 ', h('span', { class: 'sec-count' }, bus.length)),
+          h('span', { class: 'muted small' }, '미리 배차를 신청해 주세요')),
+        h('div', { class: 'table-wrap' },
+          h('table', { class: 'tbl bus-tbl' },
+            h('thead', {}, h('tr', {},
+              h('th', {}, '날짜'), h('th', {}, '교육활동'), h('th', {}, '대상'),
+              h('th', {}, '배차 내용'), h('th', {}, '담당'))),
+            h('tbody', {}, ...bus.map((a) => h('tr', {
+              class: a.status === 'pending' ? 'is-pending' : '',
+            },
+              h('td', {}, fmtK(a.date, { year: false })),
+              h('td', {}, h('b', {}, a.title),
+                a.status === 'pending' ? h('span', { class: 'badge st-pending' }, '확인 대기') : null),
+              h('td', {}, a.target || ''),
+              h('td', { class: 'bus-note' }, a.busNote || h('span', { class: 'warn-inline' }, '내용 미기재')),
+              h('td', {}, a.owner || a.dept || ''))))))); 
+    })(),
 
     noticeBox('focus', mm, {
       title: `${parseYmd(first).getMonth() + 1}월 중점지도 내용`,

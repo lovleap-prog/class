@@ -79,6 +79,10 @@ export function newActivity(partial = {}) {
     date: today(), endDate: '', time: '',
     title: '', detail: '', target: '', place: '', dept: '', owner: '',
     category: 'academic',
+    // 차를 불러야 하는 활동인가. 교무행정사가 미리 배차를 신청해야 해서
+    // 월간 계획에서 한눈에 보여야 한다.
+    needsBus: false,
+    busNote: '',        // 몇 시에 어디로, 몇 명 — 배차 신청에 필요한 것
     status: 'pending',
     source: 'manual',
     createdBy: '', createdAt: new Date().toISOString(),
