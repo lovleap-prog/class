@@ -146,8 +146,11 @@ function openImport(term, refresh) {
       return;
     }
     const months = [...new Set(items.map((x) => Number(x.date.slice(5, 7))))].sort((a, b) => a - b);
+    const t1 = items.filter((x) => x.term === '1').length;
+    const t2 = items.filter((x) => x.term === '2').length;
     summary.appendChild(h('p', {}, h('strong', {}, `${items.length}건`), ` 을(를) 읽었습니다. (${how})`));
-    summary.appendChild(h('p', { class: 'muted small' }, `${months.join('월 · ')}월`));
+    summary.appendChild(h('p', { class: 'muted small' },
+      `${months.join('월 · ')}월` + (t1 && t2 ? ` — 1학기 ${t1}건, 2학기 ${t2}건` : '')));
     summary.appendChild(h('div', { class: 'tt-import-preview' },
       ...items.slice(0, 16).map((x) => h('span', { class: 'tt-chip kind-subject' },
         h('span', { class: 'tt-chip-sub' }, x.date.slice(5).replace('-', '/')),
@@ -161,14 +164,12 @@ function openImport(term, refresh) {
     try {
       if (name.endsWith('.hwpx')) {
         const { paragraphs, tables } = await readHwpx(file);
-        const year = findYear(paragraphs.join(' ') + ' ' + file.name) || Number(yearIn.value);
+        const year = findYear(paragraphs.join(' ') + ' ' + tables.flat(2).join(' ') + ' ' + file.name) || Number(yearIn.value);
         yearIn.value = String(year);
+        // 학사일정 한글 문서에는 1학기 표와 2학기 표가 따로 있다. 전부 모은다.
         let best = [];
-        for (const t of tables) {
-          const got = parseAcademic(t, { year, term });
-          if (got.length > best.length) best = got;
-        }
-        show(best.map((x) => ({ ...x, term, source: file.name })), file.name);
+        for (const t of tables) best = best.concat(parseAcademic(t, { year, schoolYear: year, term }));
+        show(best.map((x) => ({ ...x, term: x.term || term, source: file.name })), file.name);
         return;
       }
       let grid = [];
@@ -224,14 +225,16 @@ function openImport(term, refresh) {
       label: '넣기', class: 'btn-primary',
       onClick: async (c) => {
         if (!found.length) return toast('먼저 파일이나 표를 읽어들이세요.', 'warn');
-        const here = list('academic').filter((x) => x.term === term);
+        const terms = [...new Set(found.map((x) => x.term || term))];
+        const here = list('academic').filter((x) => terms.includes(x.term));
         if (here.length) {
+          const names = terms.map((t) => (TERMS.find((x) => x[0] === t) || [, t])[1]).join(' · ');
           const wipe = await confirmDialog(
-            `${TERMS.find((t) => t[0] === term)[1]} 에 이미 ${here.length}건이 있습니다. 지우고 넣을까요?\n[취소]를 누르면 그대로 더합니다.`,
+            `${names} 에 이미 ${here.length}건이 있습니다. 지우고 넣을까요?\n[취소]를 누르면 그대로 더합니다.`,
             { okText: '지우고 넣기' });
           if (wipe) for (const x of here) await remove('academic', x.id);
         }
-        await putMany('academic', found.map((x) => newAcademic({ ...x, term })));
+        await putMany('academic', found.map((x) => newAcademic({ ...x, term: x.term || term })));
         await audit('학사일정가져오기', term, null, { count: found.length });
         toast(`${found.length}건을 넣었습니다.`, 'ok');
         c(); refresh();

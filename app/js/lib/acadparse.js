@@ -20,6 +20,11 @@ export function findYear(text) {
  */
 export function parseAcademic(rows, ctx = {}) {
   if (!rows || !rows.length) return [];
+
+  // 달력형(여러 달 가로 배치)이 가장 흔하다. 먼저 본다.
+  const cal = parseAcademicCalendar(rows, ctx);
+  if (cal) return cal;
+
   const year = ctx.year || new Date().getFullYear();
   const out = [];
 
@@ -32,6 +37,13 @@ export function parseAcademic(rows, ctx = {}) {
     return hasDate && hasTitle;
   };
   const headIdx = rows.findIndex(looksHeader);
+
+  // 머리글도 없고 'N월' 칸도 없으면 일정표가 아니다(수업일수·통계표 등).
+  // 이걸 막지 않으면 숫자를 행사명으로 읽어 쓰레기가 쌓인다.
+  if (headIdx < 0) {
+    const hasMonthCell = rows.some((r) => r.some((c) => /^\s*\d{1,2}\s*월\s*$/.test(String(c || ''))));
+    if (!hasMonthCell) return [];
+  }
   const head = (headIdx >= 0 ? rows[headIdx] : []).map((c) => clean(c).replace(/\s/g, ''));
   const col = (re) => head.findIndex((c) => re.test(c));
   const iDate = col(/날짜|월일|일자|기간/);
@@ -95,6 +107,101 @@ export function parseAcademic(rows, ctx = {}) {
     }
   }
   return out;
+}
+
+// ── 여러 달을 가로로 늘어놓은 달력형 학사일정 ──────────────
+// 학교 학사일정표는 대개 이렇게 생겼다.
+//
+//   2026학년도 1학기
+//   │  3월      │  4월      │  5월      │ …      ← 달마다 여러 열을 차지한다
+//   │ 1 일 삼일절│ 1 수 동아리│ 1 금      │ …
+//   │ 2 월 대체휴일│ 2 목     │ 2 토      │ …
+//
+// 달마다 [일, 요일, 행사…] 열이 붙어 있고, 주간 행사 띠 때문에 열이 하나 더 있기도 하다.
+
+const MONTH_CELL = /^\s*(\d{1,2})\s*월\s*$/;
+
+/** '2026학년도' 는 3~12월이 그 해, 1~2월은 이듬해다. */
+export function schoolYearDate(schoolYear, month, day) {
+  const y = month >= 3 ? schoolYear : schoolYear + 1;
+  return `${y}-${pad2(month)}-${pad2(day)}`;
+}
+
+export function findSchoolYear(text) {
+  const m = String(text || '').match(/(20\d{2})\s*학년도/);
+  return m ? Number(m[1]) : null;
+}
+
+/** 표 안에서 '1학기' / '2학기' 를 찾는다. */
+function findTerm(rows) {
+  for (const r of rows.slice(0, 3)) {
+    for (const c of r) {
+      const m = String(c || '').match(/([12])\s*학기/);
+      if (m) return m[1];
+    }
+  }
+  return '';
+}
+
+/** 달력형 표인지 보고, 맞으면 일정 목록을 돌려준다. 아니면 null. */
+export function parseAcademicCalendar(rows, ctx = {}) {
+  if (!rows || rows.length < 3) return null;
+
+  // 달 머리글 줄 찾기 — 'N월' 칸이 둘 이상인 줄
+  let headIdx = -1;
+  let cols = [];
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const found = [];
+    let prev = '';
+    rows[i].forEach((cell, j) => {
+      const m = String(cell || '').match(MONTH_CELL);
+      if (!m) { prev = ''; return; }
+      const month = Number(m[1]);
+      if (!(month >= 1 && month <= 12)) return;
+      // 가로 병합이라 같은 값이 여러 열에 걸쳐 있다. 처음 나온 열만 잡는다.
+      if (String(cell) === prev) { found[found.length - 1].end = j; return; }
+      prev = String(cell);
+      found.push({ month, start: j, end: j });
+    });
+    if (found.length >= 2) { headIdx = i; cols = found; break; }
+  }
+  if (headIdx < 0) return null;
+
+  const schoolYear = ctx.schoolYear
+    || findSchoolYear(rows.slice(0, headIdx + 1).map((r) => r.join(' ')).join(' '))
+    || ctx.year
+    || new Date().getFullYear();
+  const term = findTerm(rows) || ctx.term || '';
+
+  const out = [];
+  for (let i = headIdx + 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    for (const g of cols) {
+      // 열 위치를 못 박으면 안 된다. 달마다 병합이 달라서 요일이 세 번째 칸일 때도 있다.
+      // 가로 병합으로 같은 값이 이어지므로 먼저 붙은 중복을 접는다.
+      const vals = [];
+      for (let c = g.start; c <= g.end; c++) {
+        const v = String(row[c] || '').replace(/\s*\n\s*/g, ' ').trim();
+        if (vals.length && vals[vals.length - 1] === v) continue;
+        vals.push(v);
+      }
+      const day = Number(/^\d{1,2}$/.test(vals[0] || '') ? vals[0] : NaN);
+      if (!(day >= 1 && day <= 31)) continue;
+
+      // 두 번째가 요일이면 건너뛴다. 남은 것 중 마지막이 실제 행사다.
+      // (주간 띠가 세로로 병합돼 있으면 앞쪽에 띠 이름이 하나 더 끼어든다)
+      const rest = vals.slice(/^[월화수목금토일]$/.test(vals[1] || '') ? 2 : 1);
+      let title = '';
+      for (const v of rest) if (v) title = v;
+      if (!title) continue;
+
+      const date = schoolYearDate(schoolYear, g.month, day);
+      for (const piece of title.split(/\s*[,/·]\s*/).map((x) => x.trim()).filter(Boolean)) {
+        out.push({ date, endDate: '', title: piece, note: '', term });
+      }
+    }
+  }
+  return out.length ? out : null;
 }
 
 /** 자유 형식 줄: '3/2 시업식' */

@@ -66,22 +66,77 @@ function paraText(p) {
   return out.replace(/\u0000/g, '').replace(/[ \t]+/g, ' ').trim();
 }
 
+/**
+ * 표 한 장 → 2차원 배열.
+ *
+ * 한글 표는 칸이 병합되면 줄마다 칸 수가 달라진다. 순서대로 읽으면 열이 밀려서
+ * '3월 4월 5월' 같은 머리글과 아래 자료가 어긋난다. 그래서 각 칸이 들고 있는
+ * 주소(cellAddr)와 병합 크기(cellSpan)를 그대로 써서 격자에 앉힌다.
+ *
+ *   가로 병합 → 같은 값을 채운다. 열을 찾을 때 편하다.
+ *   세로 병합 → 첫 줄에만 두고 아래는 비운다. 행사가 여러 날로 번지면 안 된다.
+ *
+ * 주소가 없는 표(다른 프로그램이 만든 것)는 차례대로 앉힌다.
+ */
 function readTable(tbl) {
-  const rows = [];
-  for (const tr of Array.from(tbl.children).filter((c) => local(c) === 'tr')) {
-    const cells = [];
-    for (const tc of Array.from(tr.children).filter((c) => local(c) === 'tc')) {
-      const parts = [];
-      (function walk(el) {
-        for (const c of Array.from(el.children || [])) {
-          if (local(c) === 'p') parts.push(paraText(c));
-          else walk(c);
-        }
-      })(tc);
-      // 줄바꿈을 살린다. 시간표는 한 칸에 여러 줄이 들어가고, 그 줄이 곧 항목 하나다.
-      cells.push(parts.map((x) => x.trim()).filter(Boolean).join('\n'));
+  const trs = Array.from(tbl.children).filter((c) => local(c) === 'tr');
+  const grid = [];
+  const taken = new Set();
+
+  const put = (r, c, v) => {
+    while (grid.length <= r) grid.push([]);
+    const row = grid[r];
+    while (row.length <= c) row.push('');
+    row[c] = v;
+    taken.add(`${r},${c}`);
+  };
+  const attr = (el, name, dflt) => {
+    const v = el && el.getAttribute(name);
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : dflt;
+  };
+  const childOf = (el, name) =>
+    Array.from(el.children).find((c) => local(c) === name) || null;
+
+  for (let ri = 0; ri < trs.length; ri++) {
+    let autoCol = 0;
+    for (const tc of Array.from(trs[ri].children).filter((c) => local(c) === 'tc')) {
+      const text = cellText(tc);
+      const addr = childOf(tc, 'cellAddr');
+      const span = childOf(tc, 'cellSpan');
+      const rowSpan = attr(span, 'rowSpan', 1);
+      const colSpan = attr(span, 'colSpan', 1);
+
+      const r = addr ? Number(addr.getAttribute('rowAddr')) || 0 : ri;
+      let c = addr ? Number(addr.getAttribute('colAddr')) || 0 : autoCol;
+      if (!addr) while (taken.has(`${r},${c}`)) c++;
+
+      for (let dc = 0; dc < colSpan; dc++) put(r, c + dc, text);
+      for (let dr = 1; dr < rowSpan; dr++) {
+        for (let dc = 0; dc < colSpan; dc++) put(r + dr, c + dc, '');
+      }
+      autoCol = c + colSpan;
     }
-    if (cells.length) rows.push(cells);
   }
-  return rows;
+
+  const width = grid.reduce((m, r) => Math.max(m, r.length), 0);
+  return grid.map((r) => {
+    const row = r.slice();
+    while (row.length < width) row.push('');
+    return row;
+  });
+}
+
+/** 칸 안의 글. 줄바꿈을 살린다. 안에 또 표가 있으면 들어가지 않는다. */
+function cellText(tc) {
+  const parts = [];
+  (function walk(el) {
+    for (const c of Array.from(el.children || [])) {
+      const n = local(c);
+      if (n === 'tbl') continue;
+      if (n === 'p') parts.push(paraText(c));
+      else walk(c);
+    }
+  })(tc);
+  return parts.map((x) => x.trim()).filter(Boolean).join('\n');
 }
