@@ -90,7 +90,7 @@ export function membersBox(ctx) {
       : null,
 
     rows.length
-      ? h('div', { class: 'tbl-wrap' },
+      ? h('div', { class: 'table-wrap' },
           h('table', { class: 'tbl mem-tbl' },
             h('thead', {}, h('tr', {},
               h('th', {}, '이름'), h('th', {}, '계정'), h('th', {}, '부서'),

@@ -844,17 +844,34 @@ body.dragging-now .band-grid { pointer-events: none; }
 .btn-lg { padding: 11px 22px; font-size: 15px; }
 
 /* ── 명단 · 승인 ──────────────────────────────────────── */
-.mem-tbl td { vertical-align: middle; }
+/* 이름 · 계정 · 부서 · 상태 · 역할 · 처음 로그인 · 단추 (7열)
+   계정에 긴 메일 주소가 들어오면 표가 눌려서 이름이 한 글자씩 끊겼다.
+   짧은 칸은 줄바꿈을 막고, 좁으면 표째로 옆으로 밀리게 한다. */
+.mem-tbl { min-width: 720px; }
+.mem-tbl td, .mem-tbl th { vertical-align: middle; }
+.mem-tbl th, .mem-tbl td { white-space: nowrap; }
+/* 계정만 줄여 쓴다. 메일 주소는 길어도 표를 밀면 안 된다. */
+.mem-tbl th:nth-child(2), .mem-tbl td:nth-child(2) {
+  white-space: normal; word-break: break-all; max-width: 240px;
+}
+/* 상태·역할은 가운데로 모아 세로로 줄이 서게 한다. */
+.mem-tbl th:nth-child(4), .mem-tbl td:nth-child(4),
+.mem-tbl th:nth-child(5), .mem-tbl td:nth-child(5) { text-align: center; }
+.mem-tbl th:last-child, .mem-tbl td:last-child { text-align: right; }
+.mem-tbl td:last-child .row { justify-content: flex-end; }
 .mem-wait { background: var(--warn-bg); }
 .nowrap { flex-wrap: nowrap; }
-.chip {
-  display: inline-block; padding: 1px 8px; border-radius: 999px;
-  font-size: 12px; font-weight: 600; margin-left: 6px;
+
+/* 상태·역할 딱지. 칸 안에서 홀로 서므로 바깥 여백을 두지 않는다.
+   (.chip 을 통째로 덮어쓰면 다른 화면의 딱지까지 밀려난다) */
+.chip-ok, .chip-wait, .chip-admin, .chip-me {
+  display: inline-block; padding: 1px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap; border: none;
 }
 .chip-ok    { background: color-mix(in srgb, var(--ok) 15%, transparent);    color: var(--ok); }
 .chip-wait  { background: var(--warn-bg);                                    color: var(--warn); }
 .chip-admin { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
-.chip-me    { background: var(--panel-2); color: var(--muted); }
+.chip-me    { background: var(--panel-2); color: var(--muted); margin-left: 6px; }
 .warn-line {
   margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
   background: var(--warn-bg); color: var(--warn); font-weight: 600;
