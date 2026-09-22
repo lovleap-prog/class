@@ -69,9 +69,25 @@ export function bellFor(item) {
     || defaultBell();
 }
 
+/**
+ * 시정표의 교시 시각을 [[시작, 끝], …] 로 돌려준다.
+ *
+ * 파이어스토어는 배열 안의 배열을 받지 않아서 문서에는 { s, e } 객체로 담는다.
+ * 예전에 로컬로 저장해 둔 [[시작, 끝]] 모양도 그대로 읽히도록 둘 다 받는다.
+ */
+export function periodPairs(periods) {
+  if (!periods || !periods.length) return DEFAULT_PERIODS;
+  return periods.map((p) => (Array.isArray(p) ? [p[0], p[1]] : [p && p.s, p && p.e]))
+    .filter(([s, e]) => s && e);
+}
+
+/** 저장할 모양으로 되돌린다. */
+export const periodDocs = (pairs) =>
+  pairs.filter(([s, e]) => s && e).map(([s, e]) => ({ s, e }));
+
 export function periodTable(bell) {
   const b = bell || defaultBell();
-  const rows = (b && b.periods && b.periods.length) ? b.periods : DEFAULT_PERIODS;
+  const rows = periodPairs(b && b.periods);
   return rows.map(([s, e]) => ({ s: toMin(s), e: toMin(e) }));
 }
 

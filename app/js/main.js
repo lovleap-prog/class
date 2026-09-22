@@ -57,7 +57,25 @@ const isWidget = new URLSearchParams(location.search).get('mode') === 'widget';
 
 let cfg = loadConfig();
 
+/**
+ * 조용히 떨어지는 실패를 막는다.
+ *
+ * 시정표 저장이 파이어스토어에 막혀 터졌는데 아무 말도 없이 '눌러도 아무 일이 없다'
+ * 로만 보였다. 선생님들 화면의 콘솔을 볼 수가 없으니, 터진 것은 무조건 화면에 띄운다.
+ */
+function catchSilentFailures() {
+  const say = (err) => {
+    const msg = (err && (err.message || err.code)) || String(err || '');
+    if (!msg) return;
+    console.error(err);
+    toast('문제가 생겼습니다: ' + msg, 'warn');
+  };
+  window.addEventListener('unhandledrejection', (e) => say(e.reason));
+  window.addEventListener('error', (e) => { if (e.error) say(e.error); });
+}
+
 async function boot() {
+  catchSilentFailures();
   loadSavedUser();
   document.body.classList.toggle('widget', isWidget);
 

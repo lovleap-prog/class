@@ -154,7 +154,10 @@ export function newBell(partial = {}) {
   return {
     id: uid('bel'),
     name: '',
-    periods: [],       // [['09:00','09:40'], …]
+    // [{ s:'09:00', e:'09:40' }, …]
+    // 파이어스토어는 배열 안의 배열을 받지 않는다. 그래서 짝을 객체로 담는다.
+    // 읽을 때는 periodPairs() 가 옛 [['09:00','09:40']] 모양도 함께 받아준다.
+    periods: [],
     isDefault: false,
     order: 0,
     note: '',

@@ -5,8 +5,8 @@
 // 시각이 함께 틀어지므로 여러 벌을 둘 수 있게 했다.
 import { h, toast, confirmDialog, clear } from '../lib/dom.js';
 import { newBell } from '../model.js';
-import { list, put, putMany, remove } from '../store.js';
-import { DEFAULT_PERIODS, bellList, defaultBell, fmtMin } from '../conflict.js';
+import { list, put, remove } from '../store.js';
+import { bellList, defaultBell, fmtMin, periodPairs, periodDocs } from '../conflict.js';
 
 /** 단축 시정 기본안 — 40분 수업을 30분으로 줄이고 쉬는 시간도 줄인 형태 */
 const SHORT_PRESET = [
@@ -17,6 +17,21 @@ const SHORT_PRESET = [
 export function bellsBox(ctx) {
   const box = h('div', {});
   const redraw = () => draw();
+
+  /**
+   * 시정 한 벌을 만들어 저장한다.
+   * 실패하면 반드시 말한다. 예전에는 조용히 떨어져서 '눌러도 아무 일이 없다' 로 보였다.
+   */
+  const make = async (partial, okMsg) => {
+    try {
+      await put('bells', newBell(partial));
+      toast(okMsg, 'ok');
+      redraw();
+    } catch (e) {
+      console.error(e);
+      toast('시정표를 저장하지 못했습니다: ' + (e.message || e.code || ''), 'warn');
+    }
+  };
 
   function draw() {
     clear(box);
@@ -40,40 +55,33 @@ export function bellsBox(ctx) {
       !bells.length
         ? h('button', {
           class: 'btn btn-primary',
-          onClick: async () => {
-            await putMany('bells', [newBell({ name: '기본 시정', periods: shown[0].periods, isDefault: true, order: 1 })]);
-            toast('기본 시정을 저장했습니다.', 'ok'); redraw();
-          },
+          onClick: () => make(
+            { name: '기본 시정', periods: periodDocs(periodPairs(shown[0].periods)), isDefault: true, order: 1 },
+            '기본 시정을 저장했습니다.'),
         }, '기본 시정 만들기')
         : null,
       bells.length
         ? h('button', {
-          class: 'btn', onClick: async () => {
-            await put('bells', newBell({
-              name: '단축 시정', periods: SHORT_PRESET.slice(0, (def.periods || DEFAULT_PERIODS).length),
-              order: bells.length + 1,
-            }));
-            toast('단축 시정을 넣었습니다. 시각을 학교에 맞게 고쳐주세요.', 'ok'); redraw();
-          },
+          class: 'btn', onClick: () => make({
+            name: '단축 시정',
+            periods: periodDocs(SHORT_PRESET.slice(0, periodPairs(def.periods).length)),
+            order: bells.length + 1,
+          }, '단축 시정을 넣었습니다. 시각을 학교에 맞게 고쳐주세요.'),
         }, '+ 단축 시정')
         : null,
       bells.length
         ? h('button', {
-          class: 'btn', onClick: async () => {
-            await put('bells', newBell({
-              name: '수업공개 시정', periods: (def.periods || DEFAULT_PERIODS).map((x) => x.slice()),
-              order: bells.length + 1,
-              note: '공개 학년만 이 시정으로 움직입니다. 활동에 이 시정을 지정하세요.',
-            }));
-            toast('수업공개 시정을 넣었습니다. 공개 교시의 시각을 고쳐주세요.', 'ok'); redraw();
-          },
+          class: 'btn', onClick: () => make({
+            name: '수업공개 시정', periods: periodDocs(periodPairs(def.periods)),
+            order: bells.length + 1,
+            note: '공개 학년만 이 시정으로 움직입니다. 활동에 이 시정을 지정하세요.',
+          }, '수업공개 시정을 넣었습니다. 공개 교시의 시각을 고쳐주세요.'),
         }, '+ 수업공개 시정')
         : null,
       bells.length
-        ? h('button', { class: 'btn', onClick: async () => {
-          await put('bells', newBell({ name: '새 시정', periods: (def.periods || DEFAULT_PERIODS).map((x) => x.slice()), order: bells.length + 1 }));
-          redraw();
-        } }, '+ 빈 시정')
+        ? h('button', { class: 'btn', onClick: () => make(
+          { name: '새 시정', periods: periodDocs(periodPairs(def.periods)), order: bells.length + 1 },
+          '새 시정을 넣었습니다.') }, '+ 빈 시정')
         : null));
   }
 
@@ -83,7 +91,7 @@ export function bellsBox(ctx) {
 
 function bellCard(b, def, redraw, saved) {
   const real = saved > 0;                    // 저장된 문서인지(기본값 대체물인지)
-  const rows = (b.periods && b.periods.length ? b.periods : DEFAULT_PERIODS);
+  const rows = periodPairs(b.periods);
   const inputs = [];
 
   const nameIn = h('input', { class: 'input bell-name', value: b.name || '' });
@@ -91,11 +99,16 @@ function bellCard(b, def, redraw, saved) {
 
   const save = async (patch = {}) => {
     if (!real) return;
-    await put('bells', {
-      ...b, name: nameIn.value.trim() || b.name, note: noteIn.value.trim(),
-      periods: inputs.map(([a, c]) => [a.value, c.value]).filter(([a, c]) => a && c),
-      ...patch,
-    });
+    try {
+      await put('bells', {
+        ...b, name: nameIn.value.trim() || b.name, note: noteIn.value.trim(),
+        periods: periodDocs(inputs.map(([a, c]) => [a.value, c.value])),
+        ...patch,
+      });
+    } catch (e) {
+      console.error(e);
+      toast('시정표를 저장하지 못했습니다: ' + (e.message || e.code || ''), 'warn');
+    }
   };
   nameIn.addEventListener('change', () => save());
   noteIn.addEventListener('change', () => save());
