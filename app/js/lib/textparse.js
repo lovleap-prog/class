@@ -234,8 +234,19 @@ export function parseTable(rows, ctx = {}) {
   }
 
   // 업무분장표는 일정 표가 아니다(설정 탭에서 따로 읽는다).
+  //
+  // 날짜 열이 있는지를 함께 본다. 주간활동계획의 머리가
+  // '날짜(요일) | 계 | 담당자 | 주요 업무 내용 | 시간 | 장소' 인데,
+  // '담당자' 와 '업무내용' 만 보고 업무분장표로 오해해 통째로 버리고 있었다.
+  // 업무분장표에는 날짜 열이 없다. 그것이 둘을 가르는 가장 확실한 차이다.
   const head0 = (rows[0] || []).map((c) => String(c || '').replace(/\s/g, '')).join('|');
-  if (/성명|담당자/.test(head0) && /분장|담당업무|업무내용/.test(head0)) return [];
+  const hasDateCol = /날짜|일자|월일|일시/.test(head0);
+  if (!hasDateCol && /성명|담당자/.test(head0) && /분장|담당업무|업무내용/.test(head0)) return [];
+
+  // 교담·특별실 시간표도 일정 표가 아니다([시간표] 탭에서 따로 읽는다).
+  // 주간활동계획 한글 파일에는 이 표가 뒤에 딸려 오는데, 일정으로 읽으면
+  // '피아노1 피아노1 피아노1' 같은 쓰레기가 섞인다.
+  if (looksLikeTimetable(rows)) return [];
 
   // 월중 교육활동계획 표(일 | 요일 | 주요 업무 내용 | 비고)는 규칙이 달라 따로 읽는다.
   const monthPlan = parseMonthPlan(rows, ctx);
@@ -258,18 +269,24 @@ export function parseTable(rows, ctx = {}) {
   const out = [];
   for (const r of rows.slice(headerIdx + 1)) {
     if (!r.some((c) => String(c || '').trim())) continue;
-    const pick = (k) => (map[k] === undefined ? '' : String(r[map[k]] || '').trim());
+    const raw = (k) => (map[k] === undefined ? '' : String(r[map[k]] || '').trim());
+    // 병합된 칸은 줄이 갈려 온다. '생활\n인성' 은 부서 이름이 두 줄로 쓰인 것뿐이다.
+    const pick = (k) => raw(k).replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const dateCell = pick('date');
     let date = curDate, endDate = '';
     if (dateCell) {
       const d = extractDate(dateCell, year, Number((curDate || '').slice(5, 7)) || new Date().getMonth() + 1);
       if (d) { date = d.start; endDate = d.end; curDate = d.start; }
     }
-    const title = pick('title') || cleanTitle(r.filter(Boolean).join(' '));
+    // 내용 칸은 '제목 ⏎ - 세부 ⏎ - 세부' 로 적히는 일이 많다(주간활동계획이 그렇다).
+    // 첫 줄만 제목으로 삼고 나머지는 세부 내용으로 내린다.
+    const titleLines = raw('title').split('\n').map((x) => x.trim()).filter(Boolean);
+    const title = titleLines[0] || cleanTitle(r.filter(Boolean).join(' '));
     if (!title) continue;
+    const detail = [pick('detail'), titleLines.slice(1).join('\n')].filter(Boolean).join('\n');
     out.push({
       date, endDate: pick('endDate') || endDate, time: pick('time'),
-      title, detail: pick('detail'), target: pick('target'),
+      title, detail, target: pick('target'),
       place: pick('place'), owner: pick('owner'), dept: pick('dept'),
       category: guessCategory(r.join(' ')),
       _raw: r.filter(Boolean).join(' | '),
@@ -277,6 +294,16 @@ export function parseTable(rows, ctx = {}) {
     });
   }
   return out;
+}
+
+/** 머리가 요일이고 첫 열이 'N교시' 면 교담 시간표다. */
+function looksLikeTimetable(rows) {
+  const head = (rows[0] || []).map((c) => String(c || '').replace(/\s/g, ''));
+  const dows = new Set(head.filter((c) => /^[월화수목금토]$/.test(c)));
+  if (dows.size < 3) return false;
+  const periods = rows.slice(1)
+    .filter((r) => /^\d교시$/.test(String(r[0] || '').replace(/\s/g, ''))).length;
+  return periods >= 3;
 }
 
 function scoreHeader(row) {
