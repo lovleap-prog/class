@@ -48,7 +48,8 @@ export function makeDropTarget(el, day) {
 }
 
 /** 받는 칸으로 인정하는 것들. 날짜 칸과 시간표 칸. */
-const TARGET_SEL = '[data-day],[data-tt-dow]';
+// 휴지통도 받는 자리다. 여러 개를 골라 끌어다 버릴 수 있게 한다.
+const TARGET_SEL = '[data-day],[data-tt-dow],[data-drop-trash]';
 
 function onDown(e, el, a) {
   if (e.button > 0) return;           // 오른쪽·가운데 버튼은 무시

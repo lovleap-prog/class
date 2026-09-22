@@ -1029,3 +1029,38 @@ body.widget .widget-body { padding-bottom: 16px; }
   .memo-dock { bottom: 56px; }
   .update-bar { bottom: 56px; }
 }
+
+/* ── 시간표 여러 칸 고르기 · 휴지통 ────────────────────── */
+/* 하나씩 지우기가 번거로워, 골라서 한 번에 지우고 복사한다. */
+.sel-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 12px; margin-bottom: 10px;
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel));
+  border: 1px solid var(--brand); border-radius: 8px; font-size: 13.5px;
+}
+.sel-ico { font-size: 15px; }
+.sel-sp { flex: 1; }
+.tt-chip.is-sel {
+  outline: 2px solid var(--brand); outline-offset: -2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+.tt-pick { margin-right: 3px; font-size: 12px; opacity: .8; }
+
+.tt-trash {
+  position: sticky; bottom: 14px; z-index: 40;
+  margin: 14px auto 0; width: fit-content;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 999px;
+  border: 2px dashed var(--line); background: var(--panel); color: var(--muted);
+  box-shadow: var(--shadow); cursor: default; font-size: 13.5px;
+}
+.tt-trash.has-sel {
+  border-color: var(--danger); color: var(--danger); cursor: pointer;
+  border-style: solid; font-weight: 600;
+}
+.tt-trash.drop-on {
+  border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+  color: var(--danger); transform: scale(1.06);
+}
+.tt-trash-ico { font-size: 17px; }
+@media print { .tt-trash, .sel-bar { display: none; } }

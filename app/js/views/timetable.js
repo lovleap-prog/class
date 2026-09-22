@@ -18,6 +18,11 @@ const DOWS = [1, 2, 3, 4, 5];
 
 // 복사해 둔 칸/요일. 화면을 다시 그려도 남아 있도록 모듈 수준에 둔다.
 let clip = null;   // { type:'cell'|'day', label, items:[{title,kind,target,place,owner,note,period?,dow?}] }
+
+// 고른 칸들. 하나씩 지우기가 번거로워 여러 개를 골라 한 번에 지우고 복사한다.
+let selMode = false;
+let sel = new Set();
+const clearSel = () => { sel = new Set(); };
 const stripId = (x) => {
   const { id, week, ...rest } = x;
   return rest;
@@ -98,6 +103,13 @@ export function renderTimetable(ctx) {
         admin ? h('button', { class: 'btn', onClick: () => copyWeek(wk, -7, refresh) }, '지난 주 복사') : null,
         admin && slots.length
           ? h('button', {
+            class: `btn${selMode ? ' on' : ''}`,
+            title: '여러 칸을 골라 한 번에 복사하거나 지웁니다',
+            onClick: () => { selMode = !selMode; clearSel(); refresh(); },
+          }, selMode ? '고르기 끝내기' : '\u2611 고르기')
+          : null,
+        admin && slots.length
+          ? h('button', {
             class: 'btn btn-danger',
             onClick: async () => {
               if (!(await confirmDialog(`이 주의 시간표 ${slots.length}칸을 모두 지울까요?`, { danger: true, okText: '지우기' }))) return;
@@ -106,6 +118,40 @@ export function renderTimetable(ctx) {
             },
           }, '이 주 비우기')
           : null)),
+
+    // 고르기 막대 — 몇 개를 골랐고 무엇을 할 수 있는지
+    admin && selMode
+      ? h('div', { class: 'sel-bar' },
+        h('span', { class: 'sel-ico' }, '\u2611'),
+        sel.size
+          ? h('span', {}, h('strong', {}, `${sel.size}칸`), ' 골랐습니다')
+          : h('span', { class: 'muted' }, '지우거나 복사할 칸을 누르세요'),
+        h('span', { class: 'sel-sp' }),
+        h('button', {
+          class: 'btn btn-sm',
+          onClick: () => { sel = new Set(slots.map((x) => x.id)); refresh(); },
+        }, `이 주 전체 (${slots.length})`),
+        sel.size ? h('button', { class: 'btn btn-sm', onClick: () => { clearSel(); refresh(); } }, '고른 것 해제') : null,
+        sel.size
+          ? h('button', {
+            class: 'btn btn-sm',
+            title: '고른 칸을 복사합니다. 붙여넣을 칸을 누르면 들어갑니다.',
+            onClick: () => {
+              const items = slots.filter((x) => sel.has(x.id));
+              clip = { type: 'cell', label: `고른 ${items.length}개`, items: items.map(stripId) };
+              selMode = false; clearSel();
+              toast('복사했습니다. 붙여넣을 칸을 누르세요.', 'ok');
+              refresh();
+            },
+          }, '\u29C9 복사')
+          : null,
+        sel.size
+          ? h('button', {
+            class: 'btn btn-sm btn-danger',
+            onClick: () => dropDelete([...sel], refresh),
+          }, `\u{1F5D1} ${sel.size}칸 지우기`)
+          : null)
+      : null,
 
     admin && clip
       ? h('div', { class: 'clip-bar' },
@@ -122,6 +168,19 @@ export function renderTimetable(ctx) {
         : '시간표는 관리자만 고칠 수 있습니다. 겹치는 칸이 보이면 관리자에게 알려주세요.'),
 
     grid,
+
+    // 휴지통 — 칸을 끌어다 놓으면 지운다. 골라 둔 것이 있으면 한꺼번에.
+    admin && slots.length
+      ? h('div', {
+        class: `tt-trash${sel.size ? ' has-sel' : ''}`,
+        dataset: { dropTrash: '' },
+        title: sel.size ? `골라 둔 ${sel.size}칸을 여기로 끌어다 놓으세요` : '칸을 여기로 끌어다 놓으면 지워집니다',
+        onClick: () => { if (sel.size) dropDelete([...sel], refresh); },
+      },
+        h('span', { class: 'tt-trash-ico' }, '\u{1F5D1}'),
+        h('span', { class: 'tt-trash-txt' },
+          sel.size ? `${sel.size}칸 버리기` : '여기로 끌면 삭제'))
+      : null,
 
     clashTotal ? clashList(clash, slots, wk) : null);
 }
@@ -145,13 +204,23 @@ function cellNode(wk, d, p, slots, clash, admin, refresh) {
   },
     ...mine.map((s) => {
       const hits = clash.get(s.id);
+      const picked = sel.has(s.id);
       const chip = h('button', {
-        class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}`,
-        title: hits
-          ? `${s.title} — 중복: ${hits.map((x) => `${x.other.title}(${x.why.join(', ')})`).join(' / ')}`
-          : [s.title, s.target, s.place, s.owner, s.note].filter(Boolean).join(' · '),
-        onClick: (e) => { e.stopPropagation(); if (admin) openSlotForm(s, null, refresh); },
+        class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}${picked ? ' is-sel' : ''}`,
+        title: selMode
+          ? '눌러서 고르기/해제'
+          : (hits
+            ? `${s.title} — 중복: ${hits.map((x) => `${x.other.title}(${x.why.join(', ')})`).join(' / ')}`
+            : [s.title, s.target, s.place, s.owner, s.note].filter(Boolean).join(' · ')),
+        onClick: (e) => {
+          e.stopPropagation();
+          if (!admin) return;
+          // 고르는 중에는 누르면 골라진다. 수정 창은 고르기를 끝낸 뒤에 연다.
+          if (selMode) { if (picked) sel.delete(s.id); else sel.add(s.id); return refresh(); }
+          openSlotForm(s, null, refresh);
+        },
       },
+        selMode ? h('span', { class: 'tt-pick' }, picked ? '\u2611' : '\u2610') : null,
         h('span', { class: 'tt-chip-main' },
           hits ? h('span', { class: 'clash-mark' }, '⚠') : null,
           h('span', { class: 'tt-chip-title' }, s.title),
@@ -163,6 +232,12 @@ function cellNode(wk, d, p, slots, clash, admin, refresh) {
         makeDraggable(chip, {
           id: s.id, canDrag: true,
           onDrop: async (cell, opt) => {
+            // 휴지통에 놓으면 지운다. 골라 둔 것이 있으면 그것들을 한꺼번에.
+            if (cell.dataset.dropTrash !== undefined) {
+              const ids = sel.size ? [...sel] : [s.id];
+              if (sel.size && !sel.has(s.id)) ids.push(s.id);
+              return dropDelete(ids, refresh);
+            }
             if (!cell.dataset.ttDow) return;
             const dw = Number(cell.dataset.ttDow);
             const pd = Number(cell.dataset.ttPeriod);
@@ -190,6 +265,25 @@ function cellNode(wk, d, p, slots, clash, admin, refresh) {
       }, '\u29C9')
       : null);
   return cell;   // 받는 판정은 data-tt-dow / data-tt-period 로 한다
+}
+
+/** 고른(또는 끌어온) 칸들을 지운다. 한 번만 되묻는다. */
+async function dropDelete(ids, refresh) {
+  const uniq = [...new Set(ids)].filter(Boolean);
+  if (!uniq.length) return;
+  const ok = await confirmDialog(
+    uniq.length === 1 ? '이 칸을 지울까요?' : `고른 ${uniq.length}칸을 지울까요?`,
+    { danger: true, okText: '지우기' });
+  if (!ok) return;
+  try {
+    for (const id of uniq) await remove('timetable', id);
+    for (const id of uniq) sel.delete(id);
+    toast(`${uniq.length}칸을 지웠습니다.`, 'ok');
+    refresh();
+  } catch (e) {
+    console.error(e);
+    toast('지우지 못했습니다: ' + (e.message || ''), 'warn');
+  }
 }
 
 // ── 복사 · 붙여넣기 ────────────────────────────────────────
