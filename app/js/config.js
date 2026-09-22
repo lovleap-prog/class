@@ -5,7 +5,7 @@ const DEFAULTS = {
   backend: 'local',
   schoolId: 'default',
   school: {
-    name: '○○초등학교',
+    name: '낙성초등학교',
     principal: '',
     contact: '교무기획부',
   },
