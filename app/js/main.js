@@ -252,7 +252,34 @@ function render() {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return; // 파일로 직접 열면 설치가 안 된다
-  navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('SW 등록 실패', e));
+
+  navigator.serviceWorker.register('./sw.js')
+    .then((reg) => {
+      // 새 판이 올라오면 알려준다. 앱을 하루 종일 켜 두는 분이 많아서,
+      // 말해주지 않으면 며칠씩 옛 화면을 보게 된다.
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          // controller 가 이미 있다는 건 첫 설치가 아니라 '갱신' 이라는 뜻이다.
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) offerReload();
+        });
+      });
+      // 다른 탭에서 갱신됐을 수도 있으니 한 번 확인한다.
+      reg.update().catch(() => {});
+    })
+    .catch((e) => console.warn('SW 등록 실패', e));
+}
+
+let reloadOffered = false;
+function offerReload() {
+  if (reloadOffered) return;
+  reloadOffered = true;
+  const bar = h('div', { class: 'update-bar' },
+    h('span', {}, '새 버전이 나왔습니다.'),
+    h('button', { class: 'btn btn-sm btn-primary', onClick: () => location.reload() }, '새로고침'),
+    h('button', { class: 'btn btn-sm', onClick: () => bar.remove() }, '나중에'));
+  document.body.appendChild(bar);
 }
 
 boot();

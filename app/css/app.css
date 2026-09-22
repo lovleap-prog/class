@@ -817,3 +817,14 @@ body.dragging-now .band-grid { pointer-events: none; }
   body.printing #print-area thead { display: table-header-group; }
   body.printing #print-area tr { break-inside: avoid; }
 }
+
+/* 새 버전 알림 — 앱을 켜 둔 채로 며칠 쓰는 분들이 옛 화면에 갇히지 않게 */
+.update-bar {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 9000; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 999px;
+  background: var(--card, #fff); border: 1px solid var(--line, #d8dce3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
+  font-size: 14px; max-width: calc(100vw - 24px);
+}
+@media print { .update-bar { display: none; } }
