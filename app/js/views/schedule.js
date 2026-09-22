@@ -8,6 +8,7 @@ import { activitiesOn, recurringOn, afterSchoolFor, dayBundle, clashesOn, timeta
 import { clashLabel, bellList, defaultBell, bellById, dayBellId, bellFor, describeTime } from '../conflict.js';
 import { openActivityForm } from '../ui/activityForm.js';
 import { openDayExport, openPeriodExport } from '../ui/exporter.js';
+import { holidayOn } from '../lib/holidays.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
 import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
 import { makeDraggable, makeDropTarget, canMove } from '../dragmove.js';
@@ -313,6 +314,18 @@ export function renderDaily(ctx) {
       ],
     }),
 
+    (() => {
+      const off = holidayOn(d);
+      return off
+        ? h('div', { class: 'holiday-bar' },
+            h('span', { class: 'holiday-ico' }, '\u{1F6CC}'),
+            h('div', {},
+              h('b', {}, off),
+              h('span', { class: 'muted small' },
+                ' 수업이 없는 날입니다. 상시·반복 일정은 이 날 돌지 않습니다.')))
+        : null;
+    })(),
+
     pending.length
       ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d, clash: cl(a) })),
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
@@ -433,16 +446,19 @@ export function renderWeekly(ctx) {
     h('div', { class: 'week-grid' }, ...days.map((day) => {
       const b = dayBundle(day, { onlyApproved: false });
       const pend = b.activities.filter((a) => a.status === 'pending').length;
+      const off = holidayOn(day);
       const col = h('div', {
-        class: `week-col${day === today() ? ' is-today' : ''}${isWeekend(day) ? ' is-weekend' : ''}`,
+        class: `week-col${day === today() ? ' is-today' : ''}`
+          + `${isWeekend(day) ? ' is-weekend' : ''}${off ? ' is-holiday' : ''}`,
         dataset: { day },
       },
         h('button', {
           class: 'week-head', onClick: () => { ctx.setDate(day); ctx.go('daily'); },
-          title: '이 날짜의 일일 화면으로',
+          title: off ? `${off} — 수업 없음` : '이 날짜의 일일 화면으로',
         },
           h('span', { class: 'week-dow' }, WEEKDAY[parseYmd(day).getDay()]),
           h('span', { class: 'week-date' }, parseYmd(day).getDate()),
+          off ? h('span', { class: 'week-off' }, off) : null,
           pend ? h('span', { class: 'dot-pending', title: `확인 대기 ${pend}건` }, pend) : null),
         h('div', { class: 'week-body' },
           // 기간 일정은 위쪽 띠에 이미 나와 있으므로 칸 안에서는 뺀다
@@ -502,12 +518,16 @@ export function renderMonthly(ctx) {
           const out = day.slice(0, 7) !== mm;
           const acts = activitiesOn(day).filter((a) => !isSpan(a));
           const rec = recurringOn(day);
+          const off = holidayOn(day);
           const cell = h('button', {
-            class: `month-cell${out ? ' is-out' : ''}${day === today() ? ' is-today' : ''}${isWeekend(day) ? ' is-weekend' : ''}`,
+            class: `month-cell${out ? ' is-out' : ''}${day === today() ? ' is-today' : ''}`
+              + `${isWeekend(day) ? ' is-weekend' : ''}${off ? ' is-holiday' : ''}`,
             dataset: { day },
             onClick: () => goDay(day),
+            title: off || '',
           },
             h('span', { class: 'month-num' }, parseYmd(day).getDate()),
+            off ? h('span', { class: 'month-off', title: off }, off) : null,
             lanes ? h('span', { class: 'month-bandspace' }) : null,
             ...acts.slice(0, 3).map((a) => makeDraggable(h('span', {
               class: `month-item cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}`,

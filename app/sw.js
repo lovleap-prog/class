@@ -3,13 +3,13 @@
 //
 // VERSION 은 고칠 때마다 올린다. 올리면 옛 캐시를 통째로 버리고 새로 받는다.
 // 안 올리면 학교 컴퓨터에 낡은 파일이 남아 '내 화면만 다르다' 는 일이 생긴다.
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = `sam-${VERSION}`;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
   './js/main.js', './js/config.js', './js/model.js', './js/store.js', './js/store-firestore.js', './js/select.js', './js/sampledata.js', './js/checks.js', './js/matcher.js', './js/dragmove.js', './js/conflict.js', './js/views/timetable.js',
-  './js/lib/dom.js', './js/lib/zip.js', './js/lib/hwpx-read.js', './js/lib/hwpx-write.js', './js/lib/formdoc.js',
+  './js/lib/dom.js', './js/lib/zip.js', './js/lib/hwpx-read.js', './js/lib/hwpx-write.js', './js/lib/formdoc.js', './js/lib/holidays.js',
   './js/lib/xlsx-read.js', './js/lib/textparse.js', './js/lib/ttparse.js', './js/lib/neis.js',
   './js/ui/activityForm.js', './js/ui/exporter.js',
   './js/views/schedule.js', './js/views/recurring.js', './js/views/afterschool.js',

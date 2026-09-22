@@ -8,6 +8,7 @@ import { parseTimetableGrid, parseTimetableLines, parsePastedGrid } from '../lib
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 import { WEEKDAY, newSlot, weekStart, addDays, fmtK, range, today } from '../model.js';
+import { holidayOn } from '../lib/holidays.js';
 import { list, put, putMany, remove, isAdmin, audit } from '../store.js';
 import { periodTable, clashReasons } from '../conflict.js';
 import { occupancyOn } from '../select.js';
@@ -50,17 +51,24 @@ export function renderTimetable(ctx) {
 
   const grid = h('div', { class: 'tt-grid', style: { '--rows': rows } },
     h('div', { class: 'tt-corner' }, '교시'),
-    ...DOWS.map((d) => h('div', {
-      class: `tt-dow${admin ? ' is-editable' : ''}${clip && clip.type === 'day' ? ' is-target' : ''}`,
-      title: admin ? (clip && clip.type === 'day' ? '여기에 붙여넣기' : '이 요일 전체를 복사') : '',
-      onClick: () => {
-        if (!admin) return;
-        if (clip && clip.type === 'day') return pasteDay(wk, d, refresh);
-        copyDay(wk, d, slots, refresh);
+    ...DOWS.map((d) => {
+      const off = holidayOn(addDays(wk, d - 1));
+      return h('div', {
+        class: `tt-dow${admin ? ' is-editable' : ''}${clip && clip.type === 'day' ? ' is-target' : ''}`
+          + `${off ? ' is-holiday' : ''}`,
+        title: off
+          ? `${off} — 수업이 없어 시간표를 넣지 않아도 됩니다`
+          : (admin ? (clip && clip.type === 'day' ? '여기에 붙여넣기' : '이 요일 전체를 복사') : ''),
+        onClick: () => {
+          if (!admin) return;
+          if (clip && clip.type === 'day') return pasteDay(wk, d, refresh);
+          copyDay(wk, d, slots, refresh);
+        },
       },
-    },
-      h('strong', {}, WEEKDAY[d]),
-      h('span', { class: 'muted small' }, fmtK(addDays(wk, d - 1), { year: false, weekday: false })))),
+        h('strong', {}, WEEKDAY[d]),
+        h('span', { class: 'muted small' }, fmtK(addDays(wk, d - 1), { year: false, weekday: false })),
+        off ? h('span', { class: 'tt-off' }, off) : null);
+    }),
     ...Array.from({ length: rows }, (_, i) => {
       const p = i + 1;
       const t = periods[i];
@@ -122,8 +130,11 @@ const fmtMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m
 
 function cellNode(wk, d, p, slots, clash, admin, refresh) {
   const mine = slots.filter((s) => Number(s.dow) === d && Number(s.period) === p);
+  // 공휴일·휴업일은 흐리게 둔다. 그 날은 넣을 필요가 없다는 뜻이다.
+  // (막지는 않는다. 쉬는 날에 돌봄이나 방과후를 적어 두는 학교도 있다)
+  const off = holidayOn(addDays(wk, d - 1));
   const cell = h('div', {
-    class: `tt-cell${admin ? ' is-editable' : ''}`,
+    class: `tt-cell${admin ? ' is-editable' : ''}${off && !mine.length ? ' is-holiday' : ''}`,
     dataset: { ttDow: d, ttPeriod: p, ttWeek: wk },
     onClick: (e) => {
       if (!admin) return;

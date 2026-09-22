@@ -7,6 +7,7 @@ import {
   parseTermRanges, termOfDate, parseSchoolDays, parseNoMealDays,
 } from '../lib/acadparse.js';
 import { makeDraggable } from '../dragmove.js';
+import { looksLikeHoliday } from '../lib/holidays.js';
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 
@@ -156,9 +157,12 @@ function noMealChip(x, admin, refresh) {
 function acadRow(a, admin, refresh) {
   const d = parseYmd(a.date);
   const isPast = (a.endDate || a.date) < today();
+  // 쉬는 날인가. 제목으로 짐작하되, 관리자가 정해 둔 것이 있으면 그것을 따른다.
+  const off = a.isHoliday === undefined ? looksLikeHoliday(a.title) : !!a.isHoliday;
   // 줄 자체가 받는 칸이다. 다른 줄 위로 끌어다 놓으면 그 날짜로 옮겨진다.
   const li = h('li', {
-    class: `acad-item${isPast ? ' is-past' : ''}${a.date === today() ? ' is-today' : ''}`,
+    class: `acad-item${isPast ? ' is-past' : ''}${a.date === today() ? ' is-today' : ''}`
+      + `${off ? ' is-holiday' : ''}`,
     dataset: { day: a.date },
   },
     h('span', { class: 'acad-day' },
@@ -168,6 +172,7 @@ function acadRow(a, admin, refresh) {
       h('span', { class: 'acad-title' }, a.title),
       a.endDate && a.endDate > a.date
         ? h('span', { class: 'badge st-span' }, `~ ${fmtK(a.endDate, { year: false })}`) : null,
+      off ? h('span', { class: 'chip chip-off' }, '휴일') : null,
       a.note ? h('span', { class: 'chip' }, a.note) : null),
     admin
       ? h('span', { class: 'acad-tools' },
@@ -179,6 +184,17 @@ function acadRow(a, admin, refresh) {
             toast('옮겼습니다.', 'ok'); refresh();
           },
         }),
+        h('button', {
+          class: `icon-btn${off ? ' on' : ''}`,
+          title: off
+            ? '쉬는 날로 보고 있습니다. 눌러서 수업하는 날로 되돌립니다'
+            : '이 날을 쉬는 날(공휴일·휴업일)로 표시합니다',
+          onClick: async () => {
+            await put('academic', { ...a, isHoliday: !off });
+            toast(off ? '수업하는 날로 되돌렸습니다.' : '쉬는 날로 표시했습니다.', 'ok');
+            refresh();
+          },
+        }, '\u{1F6CC}'),
         h('button', { class: 'icon-btn', title: '수정', onClick: () => openRow(a, a.term, refresh) }, '✎'),
         h('button', {
           class: 'icon-btn danger', title: '삭제',

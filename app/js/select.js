@@ -2,6 +2,7 @@
 import { list } from './store.js';
 import { expandRecurring, afterSchoolOn, occursOn, byTime, range, weekStart, dow } from './model.js';
 import { findClashes } from './conflict.js';
+import { holidayOn } from './lib/holidays.js';
 
 export function activitiesOn(date, { onlyApproved = false } = {}) {
   return list('activities')
@@ -16,7 +17,13 @@ export function pendingList() {
     .sort((x, y) => (x.date === y.date ? byTime(x, y) : x.date.localeCompare(y.date)));
 }
 
+/**
+ * 그 날 도는 반복일정.
+ * 공휴일·휴업일에는 내보내지 않는다. 추석에 아침 독서활동이 잡혀 있으면
+ * 계획표가 틀린 것이고, 중복 판정까지 함께 어긋난다.
+ */
 export function recurringOn(date) {
+  if (holidayOn(date)) return [];
   return expandRecurring(list('recurring'), date, date).sort(byTime);
 }
 

@@ -174,6 +174,8 @@ export function newAcademic(partial = {}) {
     id: uid('aca'),
     kind: 'event',      // event(행사) | nomeal(비급식일) | stat(수업일수 요약)
     date: '', endDate: '', title: '', note: '',
+    // 쉬는 날인가. 비워두면 제목으로 짐작하고, 정해두면 그것을 따른다.
+    // isHoliday: true | false | undefined
     term: '1',          // 1학기 / 2학기
     source: '',
     ...partial,

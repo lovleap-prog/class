@@ -886,3 +886,40 @@ body.dragging-now .band-grid { pointer-events: none; }
 .user-pop-item:hover { background: var(--panel-2); }
 .user-pop-item.danger { color: var(--danger); }
 @media print { .user-pop { display: none; } }
+
+/* ── 법정공휴일 · 휴업일 ──────────────────────────────── */
+/* 수업이 없는 날은 한눈에 다르게 보여야 한다. 그래야 시간표를 넣을지 말지 안다. */
+.month-cell.is-holiday,
+.week-col.is-holiday { background: var(--warn-bg); }
+.month-cell.is-holiday .month-num,
+.week-col.is-holiday .week-date { color: var(--warn); }
+.month-off {
+  display: block; font-size: 11px; font-weight: 600; color: var(--warn);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin: 1px 0 2px;
+}
+.week-off {
+  display: block; font-size: 11px; font-weight: 600; color: var(--warn);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.holiday-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; margin-bottom: 12px;
+  background: var(--warn-bg); border: 1px solid var(--warn);
+  border-radius: var(--radius); color: var(--text);
+}
+.holiday-ico { font-size: 20px; line-height: 1; }
+
+/* 시간표 — 쉬는 날은 흐리게. 막지는 않는다(돌봄·방과후를 적는 학교가 있다) */
+.tt-dow.is-holiday { background: var(--warn-bg); }
+.tt-off {
+  display: block; font-size: 11px; font-weight: 600; color: var(--warn);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tt-cell.is-holiday { background: repeating-linear-gradient(
+  135deg, transparent 0 6px, var(--panel-2) 6px 12px); opacity: .7; }
+
+/* 학사일정 — 쉬는 날 줄 */
+.acad-item.is-holiday .acad-title { color: var(--warn); font-weight: 600; }
+.chip-off { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.icon-btn.on { background: var(--warn-bg); border-color: var(--warn); }
