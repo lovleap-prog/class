@@ -162,6 +162,51 @@ export function newBell(partial = {}) {
   };
 }
 
+/** 공지사항 · 월별 중점지도 — kind 로 구분하고 key(날짜/주/월)마다 한 장 */
+export function noticeId(kind, key) { return `${kind}_${key}`; }
+
+/** 학사일정 한 줄 */
+export function newAcademic(partial = {}) {
+  return {
+    id: uid('aca'),
+    date: '', endDate: '', title: '', note: '',
+    term: '1',          // 1학기 / 2학기
+    source: '',
+    ...partial,
+  };
+}
+
+/** 출장 신청 한 건 */
+export function newTrip(partial = {}) {
+  return {
+    id: uid('trp'),
+    date: '', endDate: '', time: '',
+    applicant: '', dept: '',
+    reason: '', place: '',
+    needsSub: false,     // 보결 필요 여부
+    subNote: '',         // 몇 교시 보결이 필요한지
+    status: 'pending',   // pending → approved / rejected
+    reviewedBy: '', reviewedAt: '', rejectReason: '',
+    createdAt: new Date().toISOString(),
+    ...partial,
+  };
+}
+
+/** 개인 메모 한 줄 (본인에게만 보인다) */
+export function newMemo(partial = {}) {
+  return {
+    id: uid('mem'),
+    text: '',
+    done: false,
+    checklist: false,    // 체크리스트로 쓸지
+    pinned: false,
+    color: 'yellow',
+    date: '', endDate: '',   // 기간을 적으면 일일·주간·월간에 함께 뜬다
+    createdAt: new Date().toISOString(),
+    ...partial,
+  };
+}
+
 let seq = 0;
 export function uid(prefix = 'id') {
   seq = (seq + 1) % 1000;

@@ -98,6 +98,58 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
+    // 개인 메모 — 문서 id 가 그 사람의 uid 다. 본인만 읽고 쓴다.
+    match /schools/{school}/memos/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // 공지사항 · 월별 중점지도 · 학사일정 · 시정표 — 읽기는 모두, 쓰기는 관리자만
+    match /schools/{school}/notices/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+    match /schools/{school}/academic/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+    match /schools/{school}/bells/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+    match /schools/{school}/daybell/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+    match /schools/{school}/timetable/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+
+    // 출장 — 본인이 신청하고, 승인·반려는 관리자만
+    match /schools/{school}/trips/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        (isAdmin(school) || request.resource.data.status == 'pending');
+      allow update: if isAdmin(school) ||
+        (signedIn()
+         && resource.data.status == 'pending'
+         && request.resource.data.status == 'pending'
+         && resource.data.applicant == member(school).name);
+      allow delete: if isAdmin(school) ||
+        (signedIn() && resource.data.status == 'pending'
+         && resource.data.applicant == member(school).name);
+    }
+
+    // 업무분장 · 학습 사례 — 읽기는 모두, 쓰기는 관리자만
+    match /schools/{school}/staff/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+    match /schools/{school}/lessons/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin(school);
+    }
+
     // 이력은 남기기만 하고 고치지 못하게
     match /schools/{school}/audit/{id} {
       allow read: if signedIn();

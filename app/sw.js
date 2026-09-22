@@ -9,7 +9,7 @@ const ASSETS = [
   './js/lib/xlsx-read.js', './js/lib/textparse.js', './js/lib/ttparse.js', './js/lib/neis.js',
   './js/ui/activityForm.js', './js/ui/exporter.js',
   './js/views/schedule.js', './js/views/recurring.js', './js/views/afterschool.js',
-  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js', './js/views/staffbox.js', './js/views/bellsbox.js',
+  './js/views/approvals.js', './js/views/importer.js', './js/views/settings.js', './js/views/staffbox.js', './js/views/bellsbox.js', './js/views/notice.js', './js/views/memoview.js', './js/views/academic.js', './js/views/trips.js', './js/memo.js', './js/lib/acadparse.js',
   './icons/icon-192.png', './icons/icon-512.png',
 ];
 

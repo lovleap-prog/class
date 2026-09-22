@@ -7,6 +7,10 @@ export const COLLECTIONS = [
   'staff', 'lessons', 'timetable',
   'bells',    // 시정표 (기본 / 단축 / 수업공개 …)
   'daybell',  // 날짜별로 어떤 시정을 쓰는지. 문서 id 가 날짜다.
+  'notices',  // 공지사항 · 월별 중점지도
+  'academic', // 학사일정 (1학기 / 2학기)
+  'trips',    // 출장 신청
+  'memos',    // 개인 메모. 사람마다 문서 하나. 본인만 읽는다.
 ];
 
 let backend = null;
@@ -98,7 +102,7 @@ function slim(o) {
 }
 
 /** 백업 대상. 개인 체크(checks)는 사람마다 다른 값이라 백업에 넣지 않는다. */
-export const BACKUP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'checks');
+export const BACKUP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'checks' && c !== 'memos');
 
 /** 업무분장표를 통째로 갈아끼운다. */
 export async function replaceAllStaff(docs) {

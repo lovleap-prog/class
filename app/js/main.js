@@ -6,6 +6,10 @@ import { today, fmtK, weekStart, addDays, monthStart, monthEnd } from './model.j
 import { renderDaily, renderWeekly, renderMonthly } from './views/schedule.js';
 import { renderRecurring } from './views/recurring.js';
 import { renderTimetable } from './views/timetable.js';
+import { renderAcademic } from './views/academic.js';
+import { renderTrips } from './views/trips.js';
+import { memoPanel, memoComposer } from './views/memoview.js';
+import { memoCounts, clearDoneMemos } from './memo.js';
 import { renderAfterSchool } from './views/afterschool.js';
 import { renderApprovals } from './views/approvals.js';
 import { renderImporter } from './views/importer.js';
@@ -22,6 +26,8 @@ const TABS = [
   ['timetable', '시간표', renderTimetable],
   ['recurring', '반복일정', renderRecurring],
   ['afterschool', '방과후', renderAfterSchool],
+  ['academic', '학사일정', renderAcademic],
+  ['trips', '출장', renderTrips],
   ['approvals', '승인함', renderApprovals],
   ['import', '불러오기', renderImporter],
   ['settings', '설정', renderSettings],
@@ -31,6 +37,7 @@ const state = {
   tab: 'daily',
   date: today(),
   state: {},   // 각 화면이 쓰는 임시 상태
+  memoOpen: (() => { try { return !!localStorage.getItem('sam.memoOpen'); } catch { return false; } })(),
 };
 
 const ctx = {
@@ -120,6 +127,7 @@ function header() {
       ...linkButtons(cfg),
       h('span', { class: `conn ${backendKind()}` },
         backendKind() === 'firestore' ? '실시간 공유' : '이 컴퓨터 저장'),
+      memoButton(),
       h('button', {
         class: 'btn btn-sm', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
         onClick: openWidget,
@@ -151,6 +159,41 @@ function linkButtons(cfg) {
       rel: 'noopener noreferrer',
       title: `${l.url}\n새 창에서 열립니다. 접근 권한이 있는 계정만 볼 수 있습니다.`,
     }, h('span', { class: 'link-ico' }, '\u{1F517}'), l.label || '바로가기'));
+}
+
+// ── 스티커 메모 (개인) ─────────────────────────────────────
+// 바탕화면 스티커처럼 화면 한쪽에 띄워두고 쓴다. 본인에게만 보인다.
+function memoButton() {
+  const { open } = memoCounts();
+  return h('button', {
+    class: `btn btn-sm memo-btn${state.memoOpen ? ' on' : ''}`,
+    title: '내 메모 (나에게만 보입니다)',
+    onClick: () => { state.memoOpen = !state.memoOpen; saveMemoOpen(); render(); },
+  }, '\u{1F4DD} 메모', open ? h('span', { class: 'memo-badge' }, open) : null);
+}
+
+function saveMemoOpen() {
+  try { localStorage.setItem('sam.memoOpen', state.memoOpen ? '1' : ''); } catch { /* 저장 불가 */ }
+}
+
+function memoDock() {
+  if (!state.memoOpen) return null;
+  const rerender = () => render();
+  return h('aside', { class: 'memo-dock' },
+    h('div', { class: 'memo-dock-head' },
+      h('strong', {}, '\u{1F4DD} 내 메모'),
+      h('span', { class: 'muted small' }, '나에게만 보입니다'),
+      h('button', {
+        class: 'btn btn-sm',
+        onClick: async () => {
+          const n = await clearDoneMemos();
+          toast(n ? `끝낸 메모 ${n}장을 지웠습니다.` : '끝낸 메모가 없습니다.', n ? 'ok' : 'warn');
+          render();
+        },
+      }, '끝난 것 치우기'),
+      h('button', { class: 'icon-btn', title: '닫기', onClick: () => { state.memoOpen = false; saveMemoOpen(); render(); } }, '\u2715')),
+    h('div', { class: 'memo-dock-body' }, memoPanel(rerender)),
+    h('div', { class: 'memo-dock-foot' }, memoComposer(rerender)));
 }
 
 function openWidget() {
@@ -203,7 +246,7 @@ function render() {
   syncHash();
   if (isWidget) { mount(app, renderWidget()); return; }
   const tab = TABS.find(([k]) => k === state.tab) || TABS[0];
-  mount(app, header(), h('main', { class: 'main' }, tab[2](ctx)));
+  mount(app, header(), h('main', { class: 'main' }, tab[2](ctx)), memoDock());
 }
 
 function registerSW() {

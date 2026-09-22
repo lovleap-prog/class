@@ -1,0 +1,249 @@
+// 학사일정 탭 — 1학기 / 2학기. 한글 파일을 올려 통째로 채운다.
+import { h, openModal, toast, confirmDialog, clear, download } from '../lib/dom.js';
+import { newAcademic, fmtK, parseYmd, today, WEEKDAY } from '../model.js';
+import { list, put, putMany, remove, isAdmin, audit } from '../store.js';
+import { parseAcademic, parseAcademicLines, findYear } from '../lib/acadparse.js';
+import { readHwpx } from '../lib/hwpx-read.js';
+import { readXlsx } from '../lib/xlsx-read.js';
+
+const TERMS = [['1', '1학기'], ['2', '2학기']];
+
+export function renderAcademic(ctx) {
+  const st = ctx.state.acad || (ctx.state.acad = { term: '1', q: '' });
+  const admin = isAdmin();
+  const refresh = () => ctx.refresh();
+  const all = list('academic');
+  const rows = all
+    .filter((a) => a.term === st.term)
+    .filter((a) => !st.q || (a.title + a.note).includes(st.q))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  // 월별로 묶어서 보여준다. 학사일정은 월 단위로 보는 자료다.
+  const groups = [];
+  for (const r of rows) {
+    const mm = String(r.date).slice(0, 7);
+    if (!groups.length || groups[groups.length - 1].mm !== mm) groups.push({ mm, items: [] });
+    groups[groups.length - 1].items.push(r);
+  }
+
+  const search = h('input', {
+    class: 'input', value: st.q, placeholder: '행사 이름으로 찾기',
+    onInput: (e) => { st.q = e.target.value; refresh(); },
+  });
+
+  return h('div', { class: 'view' },
+    h('div', { class: 'datebar' },
+      h('div', { class: 'datebar-nav' },
+        h('div', { class: 'seg' }, ...TERMS.map(([k, label]) => h('button', {
+          class: `seg-btn${st.term === k ? ' on' : ''}`,
+          onClick: () => { st.term = k; refresh(); },
+        }, label))),
+        h('span', { class: 'muted small' }, `${rows.length}건`)),
+      h('div', { class: 'datebar-actions' },
+        admin ? h('button', { class: 'btn btn-primary', onClick: () => openImport(st.term, refresh) }, '파일에서 가져오기') : null,
+        admin ? h('button', { class: 'btn btn-sm', onClick: () => openRow(null, st.term, refresh) }, '+ 한 줄 추가') : null,
+        rows.length ? h('button', { class: 'btn btn-sm', onClick: () => exportCsv(rows, st.term) }, 'CSV') : null,
+        admin && rows.length ? h('button', {
+          class: 'btn btn-sm btn-danger',
+          onClick: async () => {
+            if (!(await confirmDialog(`${TERMS.find((t) => t[0] === st.term)[1]} 학사일정 ${rows.length}건을 모두 지울까요?`, { danger: true, okText: '지우기' }))) return;
+            for (const r of rows) await remove('academic', r.id);
+            toast('지웠습니다.', 'ok'); refresh();
+          },
+        }, '이 학기 비우기') : null)),
+
+    h('div', { class: 'row gap' }, search),
+
+    groups.length
+      ? h('div', { class: 'acad-wrap' }, ...groups.map((g) => h('section', { class: 'sec acad-month' },
+        h('div', { class: 'sec-head' },
+          h('h3', {}, `${Number(g.mm.slice(5, 7))}월`),
+          h('span', { class: 'muted small' }, `${g.items.length}건`)),
+        h('ul', { class: 'acad-list' }, ...g.items.map((a) => acadRow(a, admin, refresh))))))
+      : h('div', { class: 'empty' },
+        admin ? '학사일정이 없습니다. [파일에서 가져오기] 로 한글 파일을 올려보세요.' : '등록된 학사일정이 없습니다.'));
+}
+
+function acadRow(a, admin, refresh) {
+  const d = parseYmd(a.date);
+  const isPast = (a.endDate || a.date) < today();
+  return h('li', { class: `acad-item${isPast ? ' is-past' : ''}${a.date === today() ? ' is-today' : ''}` },
+    h('span', { class: 'acad-day' },
+      h('strong', {}, d.getDate()),
+      h('span', { class: 'acad-dow' }, WEEKDAY[d.getDay()])),
+    h('span', { class: 'acad-main' },
+      h('span', { class: 'acad-title' }, a.title),
+      a.endDate && a.endDate > a.date
+        ? h('span', { class: 'badge st-span' }, `~ ${fmtK(a.endDate, { year: false })}`) : null,
+      a.note ? h('span', { class: 'chip' }, a.note) : null),
+    admin
+      ? h('span', { class: 'acad-tools' },
+        h('button', { class: 'icon-btn', title: '수정', onClick: () => openRow(a, a.term, refresh) }, '✎'),
+        h('button', {
+          class: 'icon-btn danger', title: '삭제',
+          onClick: async () => { await remove('academic', a.id); toast('지웠습니다.', 'ok'); refresh(); },
+        }, '✕'))
+      : null);
+}
+
+const field = (label, input, hint) =>
+  h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
+    hint ? h('span', { class: 'field-hint' }, hint) : null);
+
+function openRow(existing, term, onSaved) {
+  const a = existing ? structuredClone(existing) : newAcademic({ term, date: today() });
+  const inp = {};
+  const mk = (k, attrs = {}) => (inp[k] = h('input', { class: 'input', value: a[k] || '', ...attrs }));
+  const termSel = h('select', { class: 'input' },
+    ...TERMS.map(([k, label]) => h('option', { value: k, selected: a.term === k }, label)));
+  const body = h('div', { class: 'form-grid' },
+    field('날짜 *', mk('date', { type: 'date' })),
+    field('종료일', mk('endDate', { type: 'date' }), '여러 날 이어질 때만'),
+    h('div', { class: 'span2' }, field('행사명 *', mk('title'))),
+    field('학기', termSel),
+    field('비고', mk('note')));
+  openModal(existing ? '학사일정 수정' : '학사일정 추가', body, [
+    { label: '취소', onClick: (c) => c() },
+    {
+      label: '저장', class: 'btn-primary',
+      onClick: async (c) => {
+        const v = (k) => (inp[k] ? inp[k].value.trim() : '');
+        if (!v('date') || !v('title')) return toast('날짜와 행사명을 입력해 주세요.', 'warn');
+        await put('academic', {
+          ...a, date: v('date'), endDate: v('endDate'), title: v('title'),
+          note: v('note'), term: termSel.value,
+        });
+        toast('저장했습니다.', 'ok'); c(); if (onSaved) onSaved();
+      },
+    },
+  ]);
+}
+
+function exportCsv(rows, term) {
+  const head = ['날짜', '종료일', '행사명', '비고'];
+  const csv = [head, ...rows.map((r) => [r.date, r.endDate, r.title, r.note])]
+    .map((r) => r.map((c) => `"${String(c || '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  download(`학사일정_${term}학기.csv`, new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+}
+
+// ── 파일에서 가져오기 ──────────────────────────────────────
+function openImport(term, refresh) {
+  let found = [];
+  const summary = h('div', { class: 'tt-import-sum' });
+  const yearIn = h('input', { class: 'input sm', type: 'number', value: String(new Date().getFullYear()) });
+  const paste = h('textarea', {
+    class: 'input', rows: 6,
+    placeholder: '표를 복사해 붙여넣거나 줄로 적어도 됩니다.\n\n3/2 시업식\n5/4~5/8 현장체험학습 주간\n7/18 여름방학식',
+  });
+  const fileIn = h('input', { type: 'file', class: 'sr-file', accept: '.hwpx,.xlsx,.csv,.tsv' });
+
+  const show = (items, how) => {
+    found = items;
+    clear(summary);
+    if (!items.length) {
+      summary.appendChild(h('p', { class: 'warn-text' },
+        '읽어들일 일정을 찾지 못했습니다. 날짜와 행사명이 있는 표여야 합니다.'));
+      return;
+    }
+    const months = [...new Set(items.map((x) => Number(x.date.slice(5, 7))))].sort((a, b) => a - b);
+    summary.appendChild(h('p', {}, h('strong', {}, `${items.length}건`), ` 을(를) 읽었습니다. (${how})`));
+    summary.appendChild(h('p', { class: 'muted small' }, `${months.join('월 · ')}월`));
+    summary.appendChild(h('div', { class: 'tt-import-preview' },
+      ...items.slice(0, 16).map((x) => h('span', { class: 'tt-chip kind-subject' },
+        h('span', { class: 'tt-chip-sub' }, x.date.slice(5).replace('-', '/')),
+        h('span', { class: 'tt-chip-title' }, x.title))),
+      items.length > 16 ? h('span', { class: 'muted small' }, `외 ${items.length - 16}건`) : null));
+  };
+
+  const readFile = async (file) => {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    try {
+      if (name.endsWith('.hwpx')) {
+        const { paragraphs, tables } = await readHwpx(file);
+        const year = findYear(paragraphs.join(' ') + ' ' + file.name) || Number(yearIn.value);
+        yearIn.value = String(year);
+        let best = [];
+        for (const t of tables) {
+          const got = parseAcademic(t, { year, term });
+          if (got.length > best.length) best = got;
+        }
+        show(best.map((x) => ({ ...x, term, source: file.name })), file.name);
+        return;
+      }
+      let grid = [];
+      if (name.endsWith('.xlsx')) grid = await readXlsx(file);
+      else {
+        const text = await file.text();
+        const sep = name.endsWith('.tsv') ? '\t' : ',';
+        grid = text.replace(/^﻿/, '').split(/\r?\n/).map((l) => l.split(sep).map((c) => c.replace(/^"|"$/g, '')));
+      }
+      show(parseAcademic(grid, { year: Number(yearIn.value), term }).map((x) => ({ ...x, term, source: file.name })), file.name);
+    } catch (e) {
+      console.error(e);
+      toast('파일을 읽지 못했습니다: ' + e.message, 'warn');
+    }
+  };
+  fileIn.addEventListener('change', () => { readFile(fileIn.files[0]); fileIn.value = ''; });
+
+  const drop = h('div', { class: 'drop' },
+    h('div', { class: 'drop-icon' }, '\u{1F4C5}'),
+    h('p', {}, h('strong', {}, '학사일정 파일'), '을 끌어다 놓거나'),
+    h('button', { class: 'btn', onClick: () => fileIn.click() }, '파일 고르기'),
+    fileIn,
+    h('p', { class: 'muted small' }, '한글(.hwpx) · 엑셀(.xlsx) · CSV'));
+  ['dragover', 'dragenter'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove('over')));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]); });
+
+  const body = h('div', {},
+    h('div', { class: 'row gap', style: { marginBottom: '10px' } },
+      h('label', { class: 'check' }, '기준 연도', yearIn),
+      h('span', { class: 'muted small' }, '문서에 "2026학년도" 가 있으면 자동으로 잡습니다')),
+    drop,
+    h('div', { class: 'sec-head', style: { marginTop: '14px' } }, h('h4', {}, '또는 붙여넣기')),
+    paste,
+    h('div', { class: 'row gap', style: { marginTop: '8px' } },
+      h('button', {
+        class: 'btn',
+        onClick: () => {
+          const t = paste.value;
+          const grid = t.includes('\t')
+            ? t.split(/\r?\n/).map((l) => l.split('\t'))
+            : null;
+          const viaGrid = grid ? parseAcademic(grid, { year: Number(yearIn.value), term }) : [];
+          const items = viaGrid.length ? viaGrid : parseAcademicLines(t, Number(yearIn.value));
+          show(items.map((x) => ({ ...x, term })), viaGrid.length ? '붙여넣은 표' : '붙여넣은 줄');
+        },
+      }, '읽어들이기')),
+    summary);
+
+  openModal(`학사일정 가져오기 — ${TERMS.find((t) => t[0] === term)[1]}`, body, [
+    { label: '닫기', onClick: (c) => c() },
+    {
+      label: '넣기', class: 'btn-primary',
+      onClick: async (c) => {
+        if (!found.length) return toast('먼저 파일이나 표를 읽어들이세요.', 'warn');
+        const here = list('academic').filter((x) => x.term === term);
+        if (here.length) {
+          const wipe = await confirmDialog(
+            `${TERMS.find((t) => t[0] === term)[1]} 에 이미 ${here.length}건이 있습니다. 지우고 넣을까요?\n[취소]를 누르면 그대로 더합니다.`,
+            { okText: '지우고 넣기' });
+          if (wipe) for (const x of here) await remove('academic', x.id);
+        }
+        await putMany('academic', found.map((x) => newAcademic({ ...x, term })));
+        await audit('학사일정가져오기', term, null, { count: found.length });
+        toast(`${found.length}건을 넣었습니다.`, 'ok');
+        c(); refresh();
+      },
+    },
+  ]);
+}
+
+/** 그 날짜의 학사일정 (일일 화면에서 쓴다) */
+export function academicOn(date) {
+  return list('academic').filter((a) => {
+    const e = a.endDate && a.endDate > a.date ? a.endDate : a.date;
+    return date >= a.date && date <= e;
+  });
+}

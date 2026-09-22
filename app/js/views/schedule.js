@@ -11,6 +11,11 @@ import { openDayExport, openPeriodExport } from '../ui/exporter.js';
 import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
 import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
 import { makeDraggable, makeDropTarget, canMove } from '../dragmove.js';
+import { noticeBox } from './notice.js';
+import { memoPanel, memoComposer } from './memoview.js';
+import { memosOn, memosBetween } from '../memo.js';
+import { academicOn } from './academic.js';
+import { tripsOn, openTripForm } from './trips.js';
 
 // ── 공통 조각 ───────────────────────────────────────────────
 /**
@@ -288,6 +293,9 @@ export function renderDaily(ctx) {
   const after = afterSchoolFor(d);
   const slots = timetableOn(d);
   const clash = clashesOn(d);
+  const acad = academicOn(d);
+  const trips = tripsOn(d);
+  const myMemos = memosOn(d);
   const rerender = () => ctx.refresh();
   const cl = (a) => clash.get(a.id) || null;
 
@@ -308,6 +316,20 @@ export function renderDaily(ctx) {
     pending.length
       ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d, clash: cl(a) })),
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
+      : null,
+
+    noticeBox('notice', d, {
+      title: '공지사항',
+      placeholder: '오늘 교직원에게 알릴 내용을 적으세요.',
+      onChange: rerender,
+    }),
+
+    acad.length
+      ? h('section', { class: 'sec sec-acad' },
+        h('div', { class: 'sec-head' },
+          h('h3', {}, '\u{1F4C5} 학사일정'),
+          h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체')),
+        h('div', { class: 'chips' }, ...acad.map((a) => h('span', { class: 'acad-pill' }, a.title))))
       : null,
 
     clash.size
@@ -345,6 +367,32 @@ export function renderDaily(ctx) {
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리')),
 
     rejected.length ? section('반려된 일정', rejected.map((a) => activityCard(a, { onChange: rerender }))) : null,
+
+    h('section', { class: 'sec' },
+      h('div', { class: 'sec-head' },
+        h('h3', {}, `\u{1F697} 출장 ${trips.length}건`),
+        h('div', { class: 'row gap' },
+          h('button', { class: 'btn btn-sm', onClick: () => openTripForm({ date: d }, rerender) }, '+ 출장 신청'),
+          h('button', { class: 'btn btn-sm', onClick: () => ctx.go('trips') }, '출장 현황'))),
+      trips.length
+        ? h('div', { class: 'trip-strip' }, ...trips.map((t) => h('span', {
+          class: `trip-pill${t.needsSub ? ' need-sub' : ''}${t.status === 'pending' ? ' is-pending' : ''}`,
+          title: [t.reason, t.place, t.needsSub ? `보결: ${t.subNote || '교시 미기재'}` : ''].filter(Boolean).join(' · '),
+        },
+          h('strong', {}, t.applicant),
+          t.time ? h('span', { class: 'muted small' }, t.time) : null,
+          t.needsSub ? h('span', { class: 'badge badge-sub' }, '보결') : null)))
+        : h('div', { class: 'empty' }, '이 날짜에 등록된 출장이 없습니다.')),
+
+    h('section', { class: 'sec sec-memo' },
+      h('div', { class: 'sec-head' },
+        h('h3', {}, `\u{1F4DD} 내 메모`),
+        h('span', { class: 'muted small' }, '나에게만 보입니다')),
+      memoPanel(rerender, {
+        filter: () => myMemos,
+        emptyText: '이 날짜에 걸린 내 메모가 없습니다. 아래에 적으면 이 날짜로 붙습니다.',
+      }),
+      memoComposer(rerender, { date: d })),
   );
 }
 
@@ -364,6 +412,23 @@ export function renderWeekly(ctx) {
         h('button', { class: 'btn', onClick: () => openPeriodExport(from, to, '주간 교육활동 계획') }, '주간 계획 내보내기'),
       ],
     }),
+    noticeBox('notice', from, {
+      title: '이번 주 공지사항',
+      placeholder: '이번 주에 교직원이 알아야 할 내용을 적으세요.',
+      onChange: rerender,
+    }),
+
+    (() => {
+      const mine = memosBetween(from, to);
+      return mine.length
+        ? h('section', { class: 'sec sec-memo' },
+          h('div', { class: 'sec-head' },
+            h('h3', {}, '\u{1F4DD} 이번 주 내 메모'),
+            h('span', { class: 'muted small' }, '나에게만 보입니다')),
+          memoPanel(rerender, { filter: () => mine, compact: true }))
+        : null;
+    })(),
+
     weekBands(from, to, ctx),
     h('div', { class: 'week-grid' }, ...days.map((day) => {
       const b = dayBundle(day, { onlyApproved: false });
@@ -453,7 +518,24 @@ export function renderMonthly(ctx) {
           return makeDropTarget(cell, day);
         })),
         bandGrid(bands, { compact: true, onClick: (a) => goDay(a.date) }));
-    }));
+    }),
+
+    noticeBox('focus', mm, {
+      title: `${parseYmd(first).getMonth() + 1}월 중점지도 내용`,
+      placeholder: '월간 주간교육활동 한글 문서에 들어가는 이 달의 중점지도 내용을 적으세요.',
+      onChange: () => ctx.refresh(),
+    }),
+
+    (() => {
+      const mine = memosBetween(first, last);
+      return mine.length
+        ? h('section', { class: 'sec sec-memo' },
+          h('div', { class: 'sec-head' },
+            h('h3', {}, '\u{1F4DD} 이 달 내 메모'),
+            h('span', { class: 'muted small' }, '나에게만 보입니다')),
+          memoPanel(() => ctx.refresh(), { filter: () => mine, compact: true }))
+        : null;
+    })());
 }
 
 // ── 날짜 이동 막대 ──────────────────────────────────────────
