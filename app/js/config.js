@@ -2,7 +2,7 @@
 // backend: 'local'  → 이 컴퓨터 브라우저에만 저장(설치·체험용, 동기화 없음)
 //          'firestore' → 학교 전체 실시간 공유 (권장). docs/SETUP-firebase.md 참고
 const DEFAULTS = {
-  backend: 'local',
+  backend: 'firestore',
   schoolId: 'default',
   school: {
     name: '낙성초등학교',
@@ -11,12 +11,12 @@ const DEFAULTS = {
   },
   // 'firestore' 를 쓸 때만 채우면 된다. Firebase 콘솔 > 프로젝트 설정 > 웹 앱.
   firebase: {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: '',
+    apiKey: 'AIzaSyCdO1S2OsR-7TlDGcbDYCNR31SHAYHgSak',
+    authDomain: 'nakseong-plan.firebaseapp.com',
+    projectId: 'nakseong-plan',
+    storageBucket: 'nakseong-plan.firebasestorage.app',
+    messagingSenderId: '424353122920',
+    appId: '1:424353122920:web:e39962c37f197e375089dd',
   },
   // 머리말에 띄울 바로가기 링크. 학교 노션 자료실, 업무포털 등.
   // 모든 선생님에게 똑같이 보이게 하려면 [설정] 탭이 아니라 이 파일을 고쳐 배포한다.
