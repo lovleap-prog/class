@@ -10,6 +10,7 @@ import { staffBox } from './staffbox.js';
 import { bellsBox } from './bellsbox.js';
 import { membersBox } from './membersbox.js';
 import { sharedLinksMeta, saveSharedLinks, hasSharedLinks, editableLinks, localLinks } from '../links.js';
+import { localLeftovers, uploadLeftovers } from '../store.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -131,6 +132,9 @@ export function renderSettings(ctx) {
         ' — ', counts),
       fbBox,
       h('p', { class: 'muted small' }, '저장 위치를 바꾸면 새로 고침해야 적용됩니다. 설정 방법은 docs/SETUP-firebase.md 를 보세요.'))),
+
+    // 로컬로 먼저 써 보다 넘어온 경우, 그때 넣은 자료가 따라오지 않았을 수 있다.
+    leftoverBox(ctx),
 
     // 명단은 관리자에게만. 교사 화면에 남의 계정을 늘어놓을 이유가 없다.
     isAdmin() && backendKind() === 'firestore'
@@ -269,4 +273,64 @@ function box(title, node) {
   return h('section', { class: 'sec' }, h('div', { class: 'sec-head' }, h('h3', {}, title)), node);
 }
 
-const labelOf = (c) => ({ activities: '일정', recurring: '반복', afterschool: '방과후', audit: '이력' }[c] || c);
+const labelOf = (c) => ({
+  activities: '교육활동', recurring: '반복일정', afterschool: '방과후', audit: '이력',
+  academic: '학사일정', bells: '시정표', daybell: '날짜별 시정', timetable: '시간표',
+  staff: '업무분장', lessons: '학습한 사례', notices: '공지·중점지도', trips: '출장', board: '공지',
+}[c] || c);
+
+
+/**
+ * 이 컴퓨터에만 남아 있는 예전 자료를 학교 공용으로 올리는 상자.
+ *
+ * 로컬로 써 보다가 파이어스토어로 바꾸면 저장하는 곳이 아예 달라져서, 그때까지
+ * 넣은 학사일정·시정표·시간표가 따라오지 않는다. 학사일정이 빠지면 추석 같은
+ * 음력 공휴일이 안 잡히는 식으로 조용히 티가 난다. 그래서 찾아서 알려준다.
+ */
+function leftoverBox(ctx) {
+  if (backendKind() !== 'firestore' || !isAdmin()) return null;
+  const left = localLeftovers();
+  const cols = Object.keys(left);
+  if (!cols.length) return null;
+
+  // 이미 공용에 들어가 있는 것은 뺀다(같은 문서 번호면 이미 올린 것).
+  const todo = {};
+  for (const c of cols) {
+    const have = new Set(list(c).map((d) => d.id));
+    const rows = left[c].filter((d) => d.id && !have.has(d.id));
+    if (rows.length) todo[c] = rows;
+  }
+  const names = Object.keys(todo);
+  if (!names.length) return null;
+  const total = names.reduce((n, c) => n + todo[c].length, 0);
+
+  return box('\u{1F4E6} 이 컴퓨터에 남아 있는 예전 자료', h('div', {},
+    h('p', { class: 'note' },
+      '이 앱을 ', h('b', {}, '이 컴퓨터에만 저장'), ' 하던 때에 넣은 자료가 남아 있습니다. ',
+      'Firebase 로 바꾸면 저장하는 곳이 아예 달라져서 ', h('b', {}, '자동으로 따라가지 않습니다.'),
+      ' 아래를 올리면 모든 선생님이 함께 보게 됩니다.'),
+    h('ul', { class: 'leftover-list' },
+      ...names.map((c) => h('li', {}, h('b', {}, labelOf(c)), ` ${todo[c].length}건`))),
+    h('p', { class: 'muted small' },
+      '학사일정이 빠져 있으면 추석·설날 같은 ', h('b', {}, '음력 공휴일이 잡히지 않습니다.'),
+      ' 시간표와 월간에 연휴 표시가 안 나오면 이것 때문입니다.'),
+    h('div', { class: 'row gap' },
+      h('button', {
+        class: 'btn btn-primary',
+        onClick: async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            const n = await uploadLeftovers(todo);
+            toast(`${n}건을 학교 공용으로 올렸습니다.`, 'ok');
+            ctx.refresh();
+          } catch (err) {
+            console.error(err);
+            toast('올리지 못했습니다: ' + (err.message || ''), 'warn');
+            e.currentTarget.disabled = false;
+          }
+        },
+      }, `${total}건 모두 올리기`)),
+    h('p', { class: 'muted small' },
+      '문서 번호를 그대로 쓰므로 두 번 눌러도 자료가 늘어나지 않습니다. ',
+      '올리고 나면 이 상자는 사라집니다.')));
+}

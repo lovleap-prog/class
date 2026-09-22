@@ -145,6 +145,39 @@ export async function replaceAllStaff(docs) {
   emit('staff');
 }
 
+/**
+ * 이 컴퓨터(로컬)에 남아 있는 자료.
+ *
+ * 로컬로 먼저 써 보다가 파이어스토어로 넘어가면 그때까지 넣은 것이 따라가지 않는다.
+ * 저장하는 곳이 아예 다르기 때문이다. 학사일정을 올려두고 넘어가면 공휴일이
+ * 안 잡히는 식으로 조용히 티가 난다. 그래서 남은 것을 찾아 올려줄 수 있게 한다.
+ */
+export function localLeftovers() {
+  const out = {};
+  for (const c of BACKUP_COLLECTIONS) {
+    try {
+      const rows = JSON.parse(localStorage.getItem(`sam.col.${c}`) || '[]');
+      if (Array.isArray(rows) && rows.length) out[c] = rows;
+    } catch { /* 깨진 값은 건너뛴다 */ }
+  }
+  return out;
+}
+
+/**
+ * 남은 것을 학교 공용으로 올린다.
+ * 문서 번호를 그대로 쓰므로 두 번 눌러도 같은 자료가 덮어써질 뿐 늘어나지 않는다.
+ */
+export async function uploadLeftovers(rowsByCol) {
+  let n = 0;
+  for (const [c, rows] of Object.entries(rowsByCol || {})) {
+    if (!COLLECTIONS.includes(c) || !rows.length) continue;
+    await backend.putMany(c, rows);
+    emit(c);
+    n += rows.length;
+  }
+  return n;
+}
+
 export function exportAll() {
   const data = {};
   for (const c of BACKUP_COLLECTIONS) data[c] = list(c);
