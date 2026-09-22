@@ -1118,3 +1118,44 @@ body.widget .widget-body { padding-bottom: 16px; }
   .acad-cell { min-height: 62px; }
   .acad-cell-item { font-size: 10.5px; }
 }
+
+/* ── 일일 교과교담·특별실 — 교시별 줄, 과목별 열 ────────── */
+/* 전에는 칩을 쭉 늘어놓아 '1교시' 가 칸마다 되풀이됐다.
+   교시는 왼쪽에 한 번만, 같은 과목은 같은 자리에 세워 세로로도 눈이 따라가게 한다. */
+.ttg-row {
+  display: grid;
+  grid-template-columns: 52px repeat(var(--cols), minmax(0, 1fr));
+  gap: 8px; align-items: center;
+  padding: 5px 0; border-top: 1px solid var(--line);
+}
+.ttg-row:first-child { border-top: none; padding-top: 0; }
+.ttg-p { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.ttg-cell { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
+.ttg-item {
+  font-size: 13px; font-weight: 600; line-height: 1.35;
+  padding: 1px 7px; border-radius: 5px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.ttg-item.kind-subject { background: color-mix(in srgb, var(--brand) 11%, transparent); color: var(--brand); }
+.ttg-item.kind-special { background: color-mix(in srgb, var(--ok) 13%, transparent); color: var(--ok); }
+.ttg-item.is-clash { outline: 1.5px solid var(--danger); color: var(--danger); }
+.ttg-note { font-weight: 400; opacity: .75; margin-left: 5px; font-size: 12px; }
+
+/* 좁은 화면에서는 열을 세우지 않는다. 한 칸이 너무 좁아지면 오히려 못 읽는다.
+   교시 라벨만 왼쪽에 두고 과목은 그대로 흘려보낸다. */
+@media (max-width: 620px) {
+  .ttg-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; }
+  .ttg-p { flex: 0 0 44px; }
+  .ttg-cell.is-empty { display: none; }
+  .ttg-item { white-space: normal; }
+}
+
+/* ── 접었다 펴는 구역 ──────────────────────────────────── */
+.fold-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-align: left;
+}
+.fold-btn h3 { margin: 0; }
+.fold-arrow { font-size: 9px; color: var(--muted); width: 12px; line-height: 1; }
+.fold-btn:hover .fold-arrow { color: var(--brand); }
+.sec-fold.is-closed .sec-head { margin-bottom: 0; }

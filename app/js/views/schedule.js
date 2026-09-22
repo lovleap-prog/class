@@ -206,18 +206,56 @@ function recurringRow(a, day, clash, onChange) {
 }
 
 /** 그 날 교담·특별실 시간표를 한 줄로 */
-function timetableStrip(slots, clash) {
-  return h('div', { class: 'tt-strip' }, ...slots.map((s) => {
+/**
+ * 제목에서 학년·반 표기를 떼어낸 '과목 줄기'.
+ * 꿈자람반1,2 → 꿈자람반 / 영어5,6(원어민) → 영어(원어민) / 과학5 → 과학
+ * 같은 줄기끼리 세로로 줄을 세우려고 쓴다.
+ */
+function slotStem(title) {
+  const t = String(title || '').replace(/\s+/g, '');
+  return t.replace(/[\d,~\-·]+(?=\(|$)/g, '') || t;
+}
+
+/**
+ * 교과교담·특별실 — 교시마다 한 줄, 같은 과목은 같은 자리.
+ *
+ * 전에는 칩을 쭉 늘어놓아 '1교시' 가 칸마다 되풀이됐다. 교시를 왼쪽에 한 번만
+ * 세우고, 과목 줄기별로 열을 고정해 세로로도 눈이 따라가게 한다.
+ * (5교시에 영어만 있어도 영어 자리에 선다)
+ */
+function timetableGrid(slots, clash) {
+  const periods = [...new Set(slots.map((s) => Number(s.period) || 0))].sort((a, b) => a - b);
+
+  // 열 차례 — 처음 나온 순서대로. 대개 특별실·교담이 쓰던 차례와 같다.
+  const cols = [];
+  for (const p of periods) {
+    for (const s of slots.filter((x) => Number(x.period) === p)) {
+      const k = slotStem(s.title);
+      if (!cols.includes(k)) cols.push(k);
+    }
+  }
+
+  const chip = (s) => {
     const hits = clash.get(`tt_${s.id}`);
     return h('span', {
-      class: `tt-chip kind-${s.kind}${hits ? ' is-clash' : ''}`,
-      title: hits ? clashLabel(hits) : [s.target, s.place, s.owner, s.note].filter(Boolean).join(' · '),
+      class: `ttg-item kind-${s.kind}${hits ? ' is-clash' : ''}`,
+      title: hits ? clashLabel(hits) : [s.title, s.target, s.place, s.owner, s.note].filter(Boolean).join(' · '),
     },
-      h('span', { class: 'tt-chip-sub' }, `${s.period}교시`),
       hits ? h('span', { class: 'clash-mark' }, '\u26A0') : null,
-      h('span', { class: 'tt-chip-title' }, s.title),
-      s.note ? h('span', { class: 'tt-chip-note' }, s.note) : null);
-  }));
+      s.title,
+      s.note ? h('span', { class: 'ttg-note' }, s.note) : null);
+  };
+
+  return h('div', { class: 'ttg', style: { '--cols': cols.length } },
+    ...periods.map((p) => {
+      const mine = slots.filter((x) => Number(x.period) === p);
+      return h('div', { class: 'ttg-row' },
+        h('span', { class: 'ttg-p' }, `${p}교시`),
+        ...cols.map((k) => {
+          const here = mine.filter((x) => slotStem(x.title) === k);
+          return h('span', { class: `ttg-cell${here.length ? '' : ' is-empty'}` }, ...here.map(chip));
+        }));
+    }));
 }
 
 /** 일일 화면의 기간 일정 — 며칠째인지 함께 보여준다. */
@@ -268,6 +306,38 @@ function section(title, nodes, extra) {
   return h('section', { class: 'sec' },
     h('div', { class: 'sec-head' }, h('h3', {}, title), extra || null),
     ...(nodes.length ? nodes : [emptyBox('등록된 내용이 없습니다.')]));
+}
+
+/**
+ * 접었다 펼 수 있는 구역.
+ * 편 채로 시작하고, 접으면 그대로 기억한다(이 컴퓨터에만).
+ */
+function foldSection(key, title, body, extra) {
+  const K = `sam.fold.${key}`;
+  let open = true;
+  try { open = localStorage.getItem(K) !== '0'; } catch { /* 저장 못 해도 편 채로 */ }
+
+  const wrap = h('section', { class: `sec sec-fold${open ? '' : ' is-closed'}` });
+  const arrow = h('span', { class: 'fold-arrow' }, open ? '\u25BC' : '\u25B6');
+  const inner = h('div', { class: 'fold-body' }, body);
+  if (!open) inner.style.display = 'none';
+
+  const toggle = () => {
+    open = !open;
+    arrow.textContent = open ? '\u25BC' : '\u25B6';
+    inner.style.display = open ? '' : 'none';
+    wrap.classList.toggle('is-closed', !open);
+    try { localStorage.setItem(K, open ? '1' : '0'); } catch { /* 무시 */ }
+  };
+
+  wrap.append(
+    h('div', { class: 'sec-head' },
+      h('button', {
+        class: 'fold-btn', title: open ? '접기' : '펴기', onClick: toggle,
+      }, arrow, h('h3', {}, title)),
+      extra || null),
+    inner);
+  return wrap;
 }
 
 export function afterSchoolTableNode(programs) {
@@ -373,8 +443,8 @@ export function renderDaily(ctx) {
       h('button', { class: 'btn btn-sm', onClick: () => ctx.go('recurring') }, '반복일정 관리')),
 
     slots.length
-      ? section(`교과교담·특별실 ${slots.length}칸`,
-        [timetableStrip(slots, clash)],
+      ? foldSection('daily-tt', `교과교담·특별실 ${slots.length}칸`,
+        timetableGrid(slots, clash),
         h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, '시간표 관리'))
       : null,
     section('방과후학교', [afterSchoolTableNode(after)],
