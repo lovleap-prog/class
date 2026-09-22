@@ -1,13 +1,38 @@
 // 법정공휴일 · 휴업일 — 수업이 없는 날을 한 곳에서 판정한다.
 //
 // 출처가 셋이다.
-//  1) 양력으로 날짜가 고정된 공휴일. 해마다 계산할 수 있어 코드에 둔다.
-//  2) 학사일정 탭에 올린 학교 문서. 설날·추석·부처님오신날·대체휴일처럼
-//     음력을 따라 해마다 옮겨 다니는 날은 여기서 읽는다. 학교가 직접 만든
-//     문서이므로 이쪽이 가장 믿을 만하다.
-//  3) 관리자가 손으로 켜고 끈 것(재량휴업일 등). 위 둘을 덮어쓴다.
+//  1) 코드에 적어 둔 공휴일. 양력으로 고정된 날(삼일절·개천절…)과,
+//     음력을 따라 옮겨 다니는 날(설날·부처님오신날·추석)의 2026~2032년 표다.
+//     학사일정을 안 올려도 이만큼은 잡힌다.
+//  2) 학사일정 탭에 올린 학교 문서. 대체휴일·재량휴업일처럼 학교마다 다른 날,
+//     그리고 표에 없는 해의 음력 공휴일을 여기서 읽는다. 학교가 직접 만든
+//     문서이므로 1) 보다 늘 우선한다.
+//  3) 관리자가 손으로 켜고 끈 것. 위 둘을 덮어쓴다.
 import { list, on } from '../store.js';
-import { parseYmd, pad } from '../model.js';
+import { parseYmd, pad, addDays } from '../model.js';
+
+/**
+ * 음력을 따라 해마다 옮겨 다니는 공휴일 — [설날, 부처님오신날, 추석] 당일.
+ *
+ * 삭(합삭)과 동지·중기를 천문 계산으로 뽑은 뒤, 2020~2030년 실제 달력과
+ * 하나하나 맞춰 본 값이다. 2026년 추석(9.25)은 학교 학사일정 문서와도 같았다.
+ *
+ * **대체공휴일은 일부러 넣지 않았다.** 대체공휴일 규칙은 법이 몇 번 바뀌었고
+ * 앞으로도 바뀐다. 하루라도 틀리면 수업하는 날을 '쉬는 날' 로 적게 되는데,
+ * 그것은 빠뜨리는 것보다 나쁘다. 학사일정에 적힌 '대체 휴일' 이 그 자리를 맡고,
+ * 아래 값보다 늘 우선한다.
+ *
+ * 표에 없는 해는 예전처럼 학사일정만 본다.
+ */
+const LUNAR = {
+  2026: ['2026-02-17', '2026-05-24', '2026-09-25'],
+  2027: ['2027-02-07', '2027-05-13', '2027-09-15'],
+  2028: ['2028-01-27', '2028-05-02', '2028-10-03'],
+  2029: ['2029-02-13', '2029-05-20', '2029-09-22'],
+  2030: ['2030-02-03', '2030-05-09', '2030-09-12'],
+  2031: ['2031-01-23', '2031-05-28', '2031-10-01'],
+  2032: ['2032-02-11', '2032-05-16', '2032-09-19'],
+};
 
 /** 날짜가 해마다 같은 공휴일 */
 const FIXED = [
@@ -41,10 +66,22 @@ export const looksLikeHoliday = (title) => OFF_RE.test(String(title || '').trim(
 
 const ymdOf = (year, m, d) => `${year}-${pad(m)}-${pad(d)}`;
 
-/** 그 해의 고정 공휴일 { 날짜: 이름 } */
+/** 그 해의 공휴일 { 날짜: 이름 } — 양력 고정분과 음력분을 합친다. */
 export function fixedHolidays(year) {
   const out = {};
   for (const [m, d, name] of FIXED) out[ymdOf(year, m, d)] = name;
+
+  const lunar = LUNAR[year];
+  if (lunar) {
+    const [seol, buddha, chuseok] = lunar;
+    // 설과 추석은 전날·당일·다음날 사흘이 다 공휴일이다.
+    for (const [day, name] of [[seol, '설날'], [chuseok, '추석']]) {
+      out[addDays(day, -1)] = `${name} 연휴`;
+      out[day] = name;
+      out[addDays(day, 1)] = `${name} 연휴`;
+    }
+    out[buddha] = '부처님오신날';
+  }
   return out;
 }
 
@@ -68,8 +105,9 @@ export function holidayMap(from, to) {
 
 function build(from, to) {
   const out = {};
-  const y0 = parseYmd(from).getFullYear();
-  const y1 = parseYmd(to).getFullYear();
+  // 설 연휴가 해를 걸치는 일이 있어 앞뒤 한 해씩 더 본다.
+  const y0 = parseYmd(from).getFullYear() - 1;
+  const y1 = parseYmd(to).getFullYear() + 1;
   for (let y = y0; y <= y1; y++) {
     for (const [d, name] of Object.entries(fixedHolidays(y))) {
       if (d >= from && d <= to) out[d] = name;
