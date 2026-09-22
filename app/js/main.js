@@ -1,5 +1,5 @@
 // 앱 진입점 — 탭 전환, 헤더, 첫 실행 안내, 위젯 모드
-import { h, mount, clear, toast, openModal } from './lib/dom.js';
+import { h, mount, clear, toast, openModal, confirmDialog } from './lib/dom.js';
 import { loadConfig } from './config.js';
 import {
   initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind,
@@ -41,6 +41,7 @@ const state = {
   date: today(),
   state: {},   // 각 화면이 쓰는 임시 상태
   memoOpen: (() => { try { return !!localStorage.getItem('sam.memoOpen'); } catch { return false; } })(),
+  userMenu: false,   // 머리말 이름 단추를 눌러 연 상태
 };
 
 const ctx = {
@@ -139,10 +140,7 @@ function header(opt = {}) {
           class: 'btn btn-sm', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
           onClick: openWidget,
         }, '위젯 창'),
-        h('button', {
-          class: 'user-btn', title: '설정',
-          onClick: () => ctx.go('settings'),
-        }, `${me.name || '이름 설정'}${isAdmin() ? ' · 관리자' : ''}`),
+        userMenu(me),
       ])),
     bare ? null : h('nav', { class: 'tabs' },
       ...TABS.map(([key, label]) => h('button', {
@@ -150,6 +148,53 @@ function header(opt = {}) {
         onClick: () => ctx.go(key),
       }, label,
         key === 'approvals' && pend ? h('span', { class: 'tab-badge' }, pend) : null))));
+}
+
+/**
+ * 머리말의 이름 단추. 누르면 [설정]과 [로그아웃]이 함께 열린다.
+ *
+ * 교무실 공용 컴퓨터를 함께 쓰는 학교가 많다. 앞사람 계정이 남아 있으면
+ * 다음 분이 낸 출장 신청이 앞사람 이름으로 올라간다. 그래서 로그아웃을
+ * 설정 탭 안쪽이 아니라 여기, 한 번 누르면 닿는 자리에 둔다.
+ */
+function userMenu(me) {
+  const label = `${me.name || '이름 설정'}${isAdmin() ? ' · 관리자' : ''}`;
+  const btn = h('button', {
+    class: `user-btn${state.userMenu ? ' on' : ''}`,
+    title: backendKind() === 'firestore' ? '내 정보 · 로그아웃' : '설정',
+    onClick: (e) => {
+      e.stopPropagation();
+      // 로그인이 없는 방식에서는 여닫을 것이 없으니 바로 설정으로 간다.
+      if (backendKind() !== 'firestore') return ctx.go('settings');
+      state.userMenu = !state.userMenu;
+      render();
+    },
+  }, label, backendKind() === 'firestore' ? h('span', { class: 'caret' }, '\u25BE') : null);
+
+  if (!state.userMenu || backendKind() !== 'firestore') return h('div', { class: 'user-wrap' }, btn);
+
+  const close = () => { state.userMenu = false; render(); };
+  // 바깥을 누르면 닫는다. 한 번만 듣고 스스로 뗀다.
+  setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
+
+  return h('div', { class: 'user-wrap' }, btn,
+    h('div', { class: 'user-pop', onClick: (e) => e.stopPropagation() },
+      h('div', { class: 'user-pop-head' },
+        h('b', {}, me.name || '(이름 없음)'),
+        h('span', { class: 'muted small' }, me.email || '')),
+      h('button', {
+        class: 'user-pop-item',
+        onClick: () => { close(); ctx.go('settings'); },
+      }, '\u2699\uFE0F 설정'),
+      h('button', {
+        class: 'user-pop-item danger',
+        onClick: async () => {
+          const ok = await confirmDialog(
+            '로그아웃할까요? 공용 컴퓨터라면 쓰고 나서 꼭 눌러주세요.',
+            { okText: '로그아웃' });
+          if (ok) { state.userMenu = false; await signOut(); }
+        },
+      }, '\u{1F6AA} 로그아웃')));
 }
 
 /**
