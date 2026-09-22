@@ -57,8 +57,8 @@ export function parseAcademic(rows, ctx = {}) {
   const push = (date, endDate, title, note) => {
     const t = clean(title);
     if (!t || !date) return;
-    // 한 칸에 '시업식, 입학식' 처럼 여러 개면 나눈다
-    for (const piece of t.split(/\s*[,/·]\s*/).map((x) => x.trim()).filter(Boolean)) {
+    // 한 칸에 '시업식·입학식' 처럼 여러 개면 나눈다
+    for (const piece of splitTitle(t)) {
       out.push({ date, endDate: endDate || '', title: piece, note: clean(note) });
     }
   };
@@ -120,6 +120,118 @@ export function parseAcademic(rows, ctx = {}) {
 // 달마다 [일, 요일, 행사…] 열이 붙어 있고, 주간 행사 띠 때문에 열이 하나 더 있기도 하다.
 
 const MONTH_CELL = /^\s*(\d{1,2})\s*월\s*$/;
+
+/**
+ * 한 칸에 든 행사를 나눈다.
+ * 괄호 안의 쉼표·슬래시는 구분자가 아니다. '건강검진(1,4)' 는 하나다.
+ * 줄바꿈은 이미 공백으로 합쳐져 들어온다. 한 칸에 두 줄로 적힌 것은 한 행사다.
+ */
+export function splitTitle(text) {
+  const t = String(text || '').replace(/\s*\n\s*/g, ' ').trim();
+  if (!t) return [];
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of t) {
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+    if (depth === 0 && (ch === ',' || ch === '·' || ch === '/')) { parts.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  parts.push(cur);
+  return parts.map((x) => x.replace(/\s{2,}/g, ' ').trim()).filter(Boolean);
+}
+
+/**
+ * '1학기 (2026.03.01. ~ 2026.08.18.)' 같은 칸에서 학기 기간을 읽는다.
+ * 8월처럼 문서 편의상 1학기 표에 들어 있는 날짜를 제자리로 보내는 근거가 된다.
+ */
+export function parseTermRanges(rows) {
+  const out = [];
+  for (const r of rows || []) {
+    for (const cell of r) {
+      const t = String(cell || '').replace(/\s+/g, ' ');
+      const m = t.match(/([12])\s*학기\s*\(\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*~\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/);
+      if (!m) continue;
+      out.push({
+        term: m[1],
+        from: `${m[2]}-${pad2(m[3])}-${pad2(m[4])}`,
+        to: `${m[5]}-${pad2(m[6])}-${pad2(m[7])}`,
+      });
+    }
+  }
+  return out;
+}
+
+export function termOfDate(date, ranges) {
+  for (const r of ranges || []) {
+    if (date >= r.from && date <= r.to) return r.term;
+  }
+  return '';
+}
+
+/** '학기 / 월 / 수업일수' 표 → 학사일정 맨 위에 보여줄 요약 */
+export function parseSchoolDays(rows) {
+  if (!rows || rows.length < 2) return null;
+  const rowOf = (re) => rows.find((r) => re.test(String(r[0] || '').replace(/\s/g, '')));
+  const termRow = rowOf(/^학기$/);
+  const monthRow = rowOf(/^월$/);
+  const dayRow = rowOf(/^수업일수$/);
+  if (!monthRow || !dayRow) return null;
+
+  const months = [];
+  const subtotal = {};
+  let total = 0;
+  for (let j = 1; j < monthRow.length; j++) {
+    const mm = String(monthRow[j] || '').replace(/\s/g, '');
+    const dd = String(dayRow[j] || '').replace(/\s/g, '');
+    const term = termRow ? String(termRow[j] || '').replace(/\s/g, '').replace('학기', '') : '';
+    if (/^\d{1,2}$/.test(mm) && /^\d+$/.test(dd)) {
+      months.push({ term, month: Number(mm), days: Number(dd) });
+    } else if (/소계/.test(mm) && /^\d+$/.test(dd)) {
+      if (term) subtotal[term] = Number(dd);
+    } else if (!mm && /^\d+$/.test(dd)) {
+      total = Number(dd);
+    }
+  }
+  if (!months.length) return null;
+  // 소계 칸을 못 읽었으면 달에서 더한다.
+  for (const t of ['1', '2']) {
+    if (subtotal[t] === undefined) {
+      const sum = months.filter((m) => m.term === t).reduce((a, m) => a + m.days, 0);
+      if (sum) subtotal[t] = sum;
+    }
+  }
+  if (!total) total = Object.values(subtotal).reduce((a, b) => a + b, 0);
+  return { months, subtotal, total };
+}
+
+/**
+ * '※ 비급식일(2일): 4.29.(수)-…, 7.15.(수)' 에서 비급식일을 뽑는다.
+ * 뒤에 붙는 '돌봄교실 신학기 준비기간' 같은 다른 안내는 잘라낸다.
+ */
+export function parseNoMealDays(texts, schoolYear) {
+  const out = [];
+  for (const raw of texts || []) {
+    const line = String(raw || '').replace(/\s+/g, ' ');
+    const at = line.indexOf('비급식일');
+    if (at < 0) continue;
+    let body = line.slice(at).replace(/^비급식일\s*\([^)]*\)\s*[:：]?\s*/, '');
+    const stop = body.search(/(돌봄교실|준비기간|※)/);
+    if (stop > 0) body = body.slice(0, stop);
+
+    for (const chunk of body.split(',')) {
+      const m = chunk.match(/(\d{1,2})\s*\.\s*(\d{1,2})\s*\.?/);
+      if (!m) continue;
+      const month = Number(m[1]);
+      const day = Number(m[2]);
+      if (!(month >= 1 && month <= 12 && day >= 1 && day <= 31)) continue;
+      const note = (chunk.split(/[-–—]/)[1] || '').replace(/\([^)]*\)/g, '').trim();
+      out.push({ date: schoolYearDate(schoolYear, month, day), note });
+    }
+  }
+  return out;
+}
 
 /** '2026학년도' 는 3~12월이 그 해, 1~2월은 이듬해다. */
 export function schoolYearDate(schoolYear, month, day) {
@@ -196,7 +308,7 @@ export function parseAcademicCalendar(rows, ctx = {}) {
       if (!title) continue;
 
       const date = schoolYearDate(schoolYear, g.month, day);
-      for (const piece of title.split(/\s*[,/·]\s*/).map((x) => x.trim()).filter(Boolean)) {
+      for (const piece of splitTitle(title)) {
         out.push({ date, endDate: '', title: piece, note: '', term });
       }
     }

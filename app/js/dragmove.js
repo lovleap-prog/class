@@ -128,13 +128,14 @@ function markTarget() {
 async function onUp(e) {
   if (!st || e.pointerId !== st.pid) return;
   // Ctrl(윈도) · Alt · Cmd 를 누른 채 놓으면 옮기지 않고 복사한다.
-  st.copy = !!(e.ctrlKey || e.altKey || e.metaKey);
+  // cleanup() 이 st 를 비우므로 필요한 값은 먼저 꺼내 둔다.
+  const copy = !!(e.ctrlKey || e.altKey || e.metaKey);
   const { started, target, a } = st;
   cleanup();
   if (!started || !target) return;
   swallowNextClick();          // 끌고 놓은 뒤 칸이 눌리지 않게
-  // 옮기는 방법을 스스로 아는 항목(시간표 칸)은 그쪽에 맡긴다.
-  if (a.onDrop) { await a.onDrop(target, { copy: st.copy }); return; }
+  // 옮기는 방법을 스스로 아는 항목(시간표 칸, 학사일정 줄)은 그쪽에 맡긴다.
+  if (a.onDrop) { await a.onDrop(target, { copy }); return; }
   if (target.dataset.day) await moveActivity(a.id, target.dataset.day);
 }
 

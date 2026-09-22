@@ -2,7 +2,11 @@
 import { h, openModal, toast, confirmDialog, clear, download } from '../lib/dom.js';
 import { newAcademic, fmtK, parseYmd, today, WEEKDAY } from '../model.js';
 import { list, put, putMany, remove, isAdmin, audit } from '../store.js';
-import { parseAcademic, parseAcademicLines, findYear } from '../lib/acadparse.js';
+import {
+  parseAcademic, parseAcademicLines, findYear, findSchoolYear,
+  parseTermRanges, termOfDate, parseSchoolDays, parseNoMealDays,
+} from '../lib/acadparse.js';
+import { makeDraggable } from '../dragmove.js';
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 
@@ -13,7 +17,12 @@ export function renderAcademic(ctx) {
   const admin = isAdmin();
   const refresh = () => ctx.refresh();
   const all = list('academic');
+  const stat = all.find((a) => a.kind === 'stat');
+  const noMeal = all
+    .filter((a) => a.kind === 'nomeal' && a.term === st.term)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const rows = all
+    .filter((a) => (a.kind || 'event') === 'event')
     .filter((a) => a.term === st.term)
     .filter((a) => !st.q || (a.title + a.note).includes(st.q))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -52,6 +61,8 @@ export function renderAcademic(ctx) {
           },
         }, '이 학기 비우기') : null)),
 
+    stat ? statTable(stat, st.term) : null,
+
     h('div', { class: 'row gap' }, search),
 
     groups.length
@@ -61,13 +72,95 @@ export function renderAcademic(ctx) {
           h('span', { class: 'muted small' }, `${g.items.length}건`)),
         h('ul', { class: 'acad-list' }, ...g.items.map((a) => acadRow(a, admin, refresh))))))
       : h('div', { class: 'empty' },
-        admin ? '학사일정이 없습니다. [파일에서 가져오기] 로 한글 파일을 올려보세요.' : '등록된 학사일정이 없습니다.'));
+        admin ? '학사일정이 없습니다. [파일에서 가져오기] 로 한글 파일을 올려보세요.' : '등록된 학사일정이 없습니다.'),
+
+    noMealBox(noMeal, st.term, admin, refresh));
+}
+
+/** 수업일수 요약 — 원본 문서 맨 위에 있는 그 표 */
+function statTable(stat, term) {
+  const s = stat.stats || {};
+  const months = (s.months || []).filter((m) => !term || m.term === term || !m.term);
+  const show = months.length ? months : (s.months || []);
+  const sub = s.subtotal || {};
+  return h('section', { class: 'sec sec-stat' },
+    h('div', { class: 'sec-head' },
+      h('h3', {}, '\u{1F4CA} 수업일수'),
+      h('span', { class: 'muted small' },
+        [sub['1'] ? `1학기 ${sub['1']}일` : '', sub['2'] ? `2학기 ${sub['2']}일` : '',
+          s.total ? `계 ${s.total}일` : ''].filter(Boolean).join(' · '))),
+    h('div', { class: 'table-wrap' },
+      h('table', { class: 'tbl stat-tbl' },
+        h('thead', {}, h('tr', {},
+          h('th', {}, '월'),
+          ...show.map((m) => h('th', { class: m.term === '2' ? 'term2' : '' }, `${m.month}월`)),
+          h('th', {}, '소계'))),
+        h('tbody', {}, h('tr', {},
+          h('td', { class: 'strong' }, '수업일수'),
+          ...show.map((m) => h('td', { class: m.term === '2' ? 'term2' : '' }, m.days)),
+          h('td', { class: 'strong' }, sub[term] || show.reduce((a, m) => a + m.days, 0)))))));
+}
+
+/** 비급식일 — 조정되는 값이라 끌어 옮기거나 날짜를 바로 고칠 수 있게 둔다. */
+function noMealBox(items, term, admin, refresh) {
+  return h('section', { class: 'sec sec-nomeal' },
+    h('div', { class: 'sec-head' },
+      h('h3', {}, `\u{1F374} 비급식일 ${items.length}일`),
+      admin
+        ? h('button', {
+          class: 'btn btn-sm',
+          onClick: async () => {
+            await put('academic', newAcademic({ kind: 'nomeal', term, date: today(), title: '비급식일' }));
+            toast('비급식일을 넣었습니다. 날짜를 고쳐주세요.', 'ok'); refresh();
+          },
+        }, '+ 비급식일')
+        : null),
+    items.length
+      ? h('div', { class: 'nomeal-wrap' }, ...items.map((x) => noMealChip(x, admin, refresh)))
+      : h('div', { class: 'empty' }, '등록된 비급식일이 없습니다.'));
+}
+
+function noMealChip(x, admin, refresh) {
+  const chip = h('span', { class: 'nomeal-chip', dataset: { day: x.date } },
+    h('strong', {}, fmtK(x.date, { year: false })),
+    x.note ? h('span', { class: 'muted small' }, x.note) : null,
+    admin
+      ? h('input', {
+        type: 'date', class: 'nomeal-date', value: x.date, title: '날짜 바꾸기',
+        onChange: async (e) => {
+          if (!e.target.value) return;
+          await put('academic', { ...x, date: e.target.value });
+          toast('옮겼습니다.', 'ok'); refresh();
+        },
+      })
+      : null,
+    admin
+      ? h('button', {
+        class: 'icon-btn danger', title: '지우기',
+        onClick: async () => { await remove('academic', x.id); toast('지웠습니다.', 'ok'); refresh(); },
+      }, '\u2715')
+      : null);
+  if (admin) {
+    makeDraggable(chip, {
+      id: x.id, canDrag: true,
+      onDrop: async (cell) => {
+        if (!cell.dataset.day || cell.dataset.day === x.date) return;
+        await put('academic', { ...x, date: cell.dataset.day });
+        toast(`${fmtK(cell.dataset.day, { year: false })} 로 옮겼습니다.`, 'ok');
+      },
+    });
+  }
+  return chip;
 }
 
 function acadRow(a, admin, refresh) {
   const d = parseYmd(a.date);
   const isPast = (a.endDate || a.date) < today();
-  return h('li', { class: `acad-item${isPast ? ' is-past' : ''}${a.date === today() ? ' is-today' : ''}` },
+  // 줄 자체가 받는 칸이다. 다른 줄 위로 끌어다 놓으면 그 날짜로 옮겨진다.
+  const li = h('li', {
+    class: `acad-item${isPast ? ' is-past' : ''}${a.date === today() ? ' is-today' : ''}`,
+    dataset: { day: a.date },
+  },
     h('span', { class: 'acad-day' },
       h('strong', {}, d.getDate()),
       h('span', { class: 'acad-dow' }, WEEKDAY[d.getDay()])),
@@ -78,12 +171,32 @@ function acadRow(a, admin, refresh) {
       a.note ? h('span', { class: 'chip' }, a.note) : null),
     admin
       ? h('span', { class: 'acad-tools' },
+        h('input', {
+          type: 'date', class: 'acad-date', value: a.date, title: '날짜 바꾸기',
+          onChange: async (e) => {
+            if (!e.target.value) return;
+            await put('academic', { ...a, date: e.target.value });
+            toast('옮겼습니다.', 'ok'); refresh();
+          },
+        }),
         h('button', { class: 'icon-btn', title: '수정', onClick: () => openRow(a, a.term, refresh) }, '✎'),
         h('button', {
           class: 'icon-btn danger', title: '삭제',
           onClick: async () => { await remove('academic', a.id); toast('지웠습니다.', 'ok'); refresh(); },
         }, '✕'))
       : null);
+
+  if (admin) {
+    makeDraggable(li, {
+      id: a.id, canDrag: true,
+      onDrop: async (cell) => {
+        if (!cell.dataset.day || cell.dataset.day === a.date) return;
+        await put('academic', { ...a, date: cell.dataset.day });
+        toast(`${fmtK(cell.dataset.day, { year: false })} 로 옮겼습니다.`, 'ok');
+      },
+    });
+  }
+  return li;
 }
 
 const field = (label, input, hint) =>
@@ -129,6 +242,7 @@ function exportCsv(rows, term) {
 // ── 파일에서 가져오기 ──────────────────────────────────────
 function openImport(term, refresh) {
   let found = [];
+  const extra = { ranges: [], stat: null, noMeal: [] };
   const summary = h('div', { class: 'tt-import-sum' });
   const yearIn = h('input', { class: 'input sm', type: 'number', value: String(new Date().getFullYear()) });
   const paste = h('textarea', {
@@ -151,6 +265,11 @@ function openImport(term, refresh) {
     summary.appendChild(h('p', {}, h('strong', {}, `${items.length}건`), ` 을(를) 읽었습니다. (${how})`));
     summary.appendChild(h('p', { class: 'muted small' },
       `${months.join('월 · ')}월` + (t1 && t2 ? ` — 1학기 ${t1}건, 2학기 ${t2}건` : '')));
+    const bits = [];
+    if (extra.ranges.length) bits.push(extra.ranges.map((r) => `${r.term}학기 ${r.from}~${r.to}`).join(' / '));
+    if (extra.stat) bits.push(`수업일수 표 (계 ${extra.stat.total}일)`);
+    if (extra.noMeal.length) bits.push(`비급식일 ${extra.noMeal.length}일`);
+    if (bits.length) summary.appendChild(h('p', { class: 'muted small' }, '✓ ' + bits.join(' · ')));
     summary.appendChild(h('div', { class: 'tt-import-preview' },
       ...items.slice(0, 16).map((x) => h('span', { class: 'tt-chip kind-subject' },
         h('span', { class: 'tt-chip-sub' }, x.date.slice(5).replace('-', '/')),
@@ -164,12 +283,23 @@ function openImport(term, refresh) {
     try {
       if (name.endsWith('.hwpx')) {
         const { paragraphs, tables } = await readHwpx(file);
-        const year = findYear(paragraphs.join(' ') + ' ' + tables.flat(2).join(' ') + ' ' + file.name) || Number(yearIn.value);
+        const docText = paragraphs.join(' ') + ' ' + tables.flat(2).join(' ') + ' ' + file.name;
+        const year = findSchoolYear(docText) || findYear(docText) || Number(yearIn.value);
         yearIn.value = String(year);
-        // 학사일정 한글 문서에는 1학기 표와 2학기 표가 따로 있다. 전부 모은다.
+
+        // 학기 기간('2학기 (2026.08.19 ~ …)')이 적혀 있으면 그것이 학기의 기준이다.
+        // 문서 작성 편의상 8월이 1학기 표에 들어 있어도 제자리로 간다.
+        extra.ranges = tables.flatMap((t) => parseTermRanges(t));
+        extra.stat = tables.map((t) => parseSchoolDays(t)).find(Boolean) || null;
+        extra.noMeal = parseNoMealDays(paragraphs, year);
+
         let best = [];
         for (const t of tables) best = best.concat(parseAcademic(t, { year, schoolYear: year, term }));
-        show(best.map((x) => ({ ...x, term: x.term || term, source: file.name })), file.name);
+        show(best.map((x) => ({
+          ...x,
+          term: termOfDate(x.date, extra.ranges) || x.term || term,
+          source: file.name,
+        })), file.name);
         return;
       }
       let grid = [];
@@ -234,9 +364,25 @@ function openImport(term, refresh) {
             { okText: '지우고 넣기' });
           if (wipe) for (const x of here) await remove('academic', x.id);
         }
-        await putMany('academic', found.map((x) => newAcademic({ ...x, term: x.term || term })));
-        await audit('학사일정가져오기', term, null, { count: found.length });
-        toast(`${found.length}건을 넣었습니다.`, 'ok');
+        await putMany('academic', found.map((x) => newAcademic({ ...x, kind: 'event', term: x.term || term })));
+
+        if (extra.stat) {
+          const prev = list('academic').find((x) => x.kind === 'stat');
+          if (prev) await remove('academic', prev.id);
+          await put('academic', newAcademic({ kind: 'stat', title: '수업일수', stats: extra.stat }));
+        }
+        if (extra.noMeal.length) {
+          for (const x of list('academic').filter((y) => y.kind === 'nomeal')) await remove('academic', x.id);
+          await putMany('academic', extra.noMeal.map((x) => newAcademic({
+            kind: 'nomeal', date: x.date, note: x.note, title: '비급식일',
+            term: termOfDate(x.date, extra.ranges) || term,
+          })));
+        }
+        await audit('학사일정가져오기', term, null, {
+          count: found.length, stat: !!extra.stat, noMeal: extra.noMeal.length,
+        });
+        toast(`${found.length}건을 넣었습니다.`
+          + (extra.noMeal.length ? ` (비급식일 ${extra.noMeal.length}일 포함)` : ''), 'ok');
         c(); refresh();
       },
     },

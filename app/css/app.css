@@ -728,3 +728,25 @@ body.dragging-now .band-grid { pointer-events: none; }
   .acad-wrap { grid-template-columns: 1fr; }
   .trip-card { grid-template-columns: 84px 1fr auto; }
 }
+
+/* ── 학사일정: 수업일수 · 비급식일 ──── */
+.sec-stat { border-left: 4px solid var(--cat-meeting); }
+.stat-tbl th, .stat-tbl td { text-align: center; padding: 5px 8px; }
+.stat-tbl th.term2, .stat-tbl td.term2 { background: color-mix(in srgb, var(--cat-event) 8%, transparent); }
+.sec-nomeal { border-left: 4px solid var(--cat-afterschool); margin-top: 14px; }
+.nomeal-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+.nomeal-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: color-mix(in srgb, var(--cat-afterschool) 13%, transparent);
+  color: var(--cat-afterschool); border: 1px solid color-mix(in srgb, var(--cat-afterschool) 35%, transparent);
+  border-radius: 999px; padding: 4px 10px 4px 12px; font-size: 13px;
+}
+.nomeal-chip .icon-btn { width: 20px; height: 20px; font-size: 11px; color: inherit; }
+.nomeal-date, .acad-date {
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  border-radius: 5px; font-size: 11px; padding: 1px 4px; width: 108px;
+}
+.acad-date { opacity: 0; }
+.acad-item:hover .acad-date, .acad-date:focus { opacity: 1; }
+.acad-item.drop-on { background: color-mix(in srgb, var(--brand) 14%, transparent); box-shadow: inset 0 0 0 2px var(--brand); border-radius: 6px; }
+.nomeal-chip.drop-on { box-shadow: inset 0 0 0 2px var(--brand); }

@@ -169,6 +169,7 @@ export function noticeId(kind, key) { return `${kind}_${key}`; }
 export function newAcademic(partial = {}) {
   return {
     id: uid('aca'),
+    kind: 'event',      // event(행사) | nomeal(비급식일) | stat(수업일수 요약)
     date: '', endDate: '', title: '', note: '',
     term: '1',          // 1학기 / 2학기
     source: '',
