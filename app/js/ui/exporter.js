@@ -1,7 +1,8 @@
 // 결재 문구 / 메신저 안내 / 한글 파일 내보내기 모달
 import { h, openModal, toast, copyText, download } from '../lib/dom.js';
 import { neisApprovalText, messengerText, periodText } from '../lib/neis.js';
-import { buildHwpx, buildHtmlForHwp } from '../lib/hwpx-write.js';
+import { buildHwpx, buildHwpxDoc, buildHtmlForHwp, renderBlocksHtml } from '../lib/hwpx-write.js';
+import { weeklyForm, monthlyForm } from '../lib/formdoc.js';
 import { dayBundle, periodBundle, afterSchoolFor } from '../select.js';
 import { fmtK, parseYmd, WEEKDAY } from '../model.js';
 import { loadConfig } from '../config.js';
@@ -102,41 +103,111 @@ function afterSchoolTable(date) {
   return { caption: `방과후학교 운영 현황 (${fmtK(date)})`, head: ['시간', '강좌명', '대상', '장소', '강사', '인원'], rows };
 }
 
-/** 주간·월간 내보내기 */
-export function openPeriodExport(from, to, title) {
+/**
+ * 주간·월간 내보내기.
+ * 기본은 **학교 서식**(표)이다. 결재는 줄글로 못 올리기 때문이다.
+ * 줄글 요약은 메신저에 붙일 때 쓰라고 옆 칸에 남겨 두었다.
+ * @param {'weekly'|'monthly'} form
+ */
+export function openPeriodExport(from, to, title, form = 'weekly') {
   const cfg = loadConfig();
-  const days = periodBundle(from, to).filter((d) => d.activities.length || d.recurring.length || d.afterSchool.length);
-  const out = h('textarea', { class: 'input mono', rows: 20, spellcheck: 'false' });
-  out.value = periodText({ from, to, days, title });
+  const doc = form === 'monthly' ? monthlyForm(from) : weeklyForm(from, to);
+  const margin = form === 'monthly' ? '15mm' : '10mm';
+  const marginX = form === 'monthly' ? 4251 : 2834;
+  const fileName = `${(form === 'monthly' ? '월중교육활동계획' : '주간활동계획')}_${fileDate(from)}`;
 
-  const body = h('div', {}, out,
-    h('p', { class: 'muted small' }, '승인된 일정만 담깁니다. 대기 중인 건은 먼저 승인해 주세요.'));
+  const days = periodBundle(from, to).filter((d) => d.activities.length || d.recurring.length || d.afterSchool.length);
+  const plain = periodText({ from, to, days, title });
+
+  // 서식 미리보기 — 내려받기 전에 눈으로 확인하고 인쇄까지 여기서 한다.
+  const sheet = h('div', { class: 'formdoc' });
+  sheet.innerHTML = renderBlocksHtml(doc.blocks);
+  const preview = h('div', { class: 'formdoc-wrap' }, sheet);
+
+  const out = h('textarea', { class: 'input mono', rows: 18, spellcheck: 'false' });
+  out.value = plain;
+  const plainBox = h('div', { style: { display: 'none' } }, out,
+    h('p', { class: 'muted small' }, '메신저·게시판에 붙일 때 쓰세요. 결재에는 왼쪽 [학교 서식]을 쓰십시오.'));
+
+  let mode = 0;
+  const seg = h('div', { class: 'seg' },
+    ...['학교 서식', '줄글 요약'].map((t, i) => h('button', {
+      class: `seg-btn${i === 0 ? ' on' : ''}`,
+      onClick: (e) => {
+        mode = i;
+        for (const b of e.currentTarget.parentNode.children) b.classList.remove('on');
+        e.currentTarget.classList.add('on');
+        preview.style.display = i === 0 ? '' : 'none';
+        plainBox.style.display = i === 0 ? 'none' : '';
+      },
+    }, t)));
+
+  const body = h('div', {}, seg, preview, plainBox,
+    h('p', { class: 'muted small' },
+      '승인된 일정만 담깁니다. 대기 중인 건은 먼저 승인해 주세요.'));
+
+  const htmlDoc = () => buildHtmlForHwp({
+    title: doc.title, blocks: doc.blocks, margin: `15mm ${margin}`,
+    font: cfg.hwp.font, fontSize: cfg.hwp.fontSize,
+  });
 
   openModal(`${title} 내보내기`, body, [
     { label: '닫기', onClick: (c) => c() },
-    { label: '복사', onClick: async () => { await copyText(out.value); toast('복사했습니다.', 'ok'); } },
+    {
+      label: '인쇄',
+      onClick: () => { printSheet(sheet.innerHTML); },
+    },
+    {
+      label: '복사(줄글)',
+      onClick: async () => { await copyText(out.value); toast('줄글 요약을 복사했습니다.', 'ok'); },
+    },
     {
       label: '한글용 HTML',
       onClick: () => {
-        const html = buildHtmlForHwp({
-          title, paragraphs: out.value.split('\n').slice(1),
-          font: cfg.hwp.font, fontSize: cfg.hwp.fontSize,
-        });
-        download(`${title.replace(/\s/g, '')}_${fileDate(from)}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }));
+        download(`${fileName}.html`, new Blob([htmlDoc()], { type: 'text/html;charset=utf-8' }));
+        toast('한글에서 [불러오기] → 파일 형식 "HTML 문서"로 열면 표째로 들어옵니다.', 'ok');
       },
     },
     {
       label: '한글(.hwpx)',
       class: 'btn-primary',
       onClick: async () => {
-        const lines = out.value.split('\n');
-        const blob = await buildHwpx(lines.slice(1).join('\n'), {
-          title, titleLine: lines[0], font: cfg.hwp.font, fontSize: cfg.hwp.fontSize,
-        });
-        download(`${title.replace(/\s/g, '')}_${fileDate(from)}.hwpx`, blob);
+        try {
+          const blob = await buildHwpxDoc(doc.blocks, {
+            title: doc.title, font: cfg.hwp.font, fontSize: cfg.hwp.fontSize,
+            marginX, marginY: 2834,
+          });
+          download(`${fileName}.hwpx`, blob);
+          toast('내려받았습니다. 열리지 않으면 [한글용 HTML]을 쓰세요.', 'ok');
+        } catch (e) {
+          console.error(e);
+          toast('한글 파일 생성에 실패했습니다: ' + e.message, 'warn');
+        }
       },
     },
   ]);
+}
+
+/**
+ * 화면에 있는 서식을 그대로 인쇄한다.
+ * 새 창은 휴대폰·회사 브라우저에서 막히는 일이 잦아, 본문 옆에 인쇄용 칸을 만들어 쓴다.
+ */
+function printSheet(html) {
+  const prev = document.getElementById('print-area');
+  if (prev) prev.remove();
+  const area = h('div', { id: 'print-area' });
+  area.innerHTML = html;
+  document.body.appendChild(area);
+  document.body.classList.add('printing');
+
+  const done = () => {
+    document.body.classList.remove('printing');
+    const a = document.getElementById('print-area');
+    if (a) a.remove();
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { window.print(); setTimeout(done, 1500); }, 60);
 }
 
 /** 방과후학교 시간표만 따로 표로 내보내기 */

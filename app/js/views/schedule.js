@@ -409,7 +409,7 @@ export function renderWeekly(ctx) {
       onPrev: () => ctx.setDate(addDays(from, -7)),
       onNext: () => ctx.setDate(addDays(from, 7)),
       actions: [
-        h('button', { class: 'btn', onClick: () => openPeriodExport(from, to, '주간 교육활동 계획') }, '주간 계획 내보내기'),
+        h('button', { class: 'btn', onClick: () => openPeriodExport(from, to, '주간활동계획', 'weekly') }, '주간활동계획 내보내기'),
       ],
     }),
     noticeBox('notice', from, {
@@ -488,7 +488,7 @@ export function renderMonthly(ctx) {
       onPrev: () => ctx.setDate(addMonths(ctx.date, -1)),
       onNext: () => ctx.setDate(addMonths(ctx.date, 1)),
       actions: [
-        h('button', { class: 'btn', onClick: () => openPeriodExport(first, last, '월간 교육활동 계획') }, '월간 계획 내보내기'),
+        h('button', { class: 'btn', onClick: () => openPeriodExport(first, last, '월중 교육활동계획', 'monthly') }, '월중계획 내보내기'),
       ],
     }),
     h('div', { class: 'month-dows' },

@@ -1,7 +1,7 @@
 // 결재용 한글 문서(.hwpx) 생성 — OWPML 최소 구성.
-// 표 없이 '문단' 으로만 구성한다. 나이스 일일교육활동 결재 본문이 원래 줄글 형식이고,
-// hwpx 표 구조(hp:tbl)는 스펙이 까다로워 호환성 위험이 커서 의도적으로 제외했다.
-// 표가 필요한 방과후학교 시간표는 exportHtmlForHwp() 로 내보낸다(한글이 HTML을 표째로 연다).
+// 줄글(나이스 결재 본문)과 표(주간활동계획·월중계획 서식) 둘 다 만든다.
+// 표는 실제 학교 문서의 hp:tbl 구조를 그대로 본떴다. 칸 병합(rowSpan·colSpan)까지 낸다.
+// 그래도 안 열리는 한글 버전이 있을 수 있어 buildHtmlForHwp() 폴백을 함께 둔다.
 import { zip } from './zip.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -33,7 +33,8 @@ function charProperties(baseSize) {
     `<hh:offset hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>` +
     (bold ? '<hh:bold/>' : '') +
     `</hh:charPr>`;
-  return `<hh:charProperties itemCnt="3">${pr(0, baseSize, false)}${pr(1, Math.round(baseSize * 1.35), true)}${pr(2, Math.round(baseSize * 0.85), false)}</hh:charProperties>`;
+  return `<hh:charProperties itemCnt="4">${pr(0, baseSize, false)}${pr(1, Math.round(baseSize * 1.35), true)}` +
+    `${pr(2, Math.round(baseSize * 0.85), false)}${pr(3, baseSize, true)}</hh:charProperties>`;
 }
 
 /** 문단 모양: 0=왼쪽, 1=가운데 */
@@ -88,14 +89,14 @@ function borderFill(id, type) {
 
 const LINESEG = '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="42520" flags="393216"/></hp:linesegarray>';
 
-function secPr() {
+function secPr(opt = {}) {
   return `<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0">` +
     `<hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0" strtnum="0"/>` +
     `<hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/>` +
     `<hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/>` +
     `<hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>` +
-    `<hp:pagePr landscape="WIDELY" width="59528" height="84188" gutterType="LEFT_ONLY">` +
-      `<hp:margin header="4252" footer="4252" gutter="0" left="8504" right="8504" top="5668" bottom="4252"/></hp:pagePr>` +
+    `<hp:pagePr landscape="WIDELY" width="${PAGE_W}" height="${PAGE_H}" gutterType="LEFT_ONLY">` +
+      `<hp:margin header="2834" footer="2834" gutter="0" left="${opt.marginX || 8504}" right="${opt.marginX || 8504}" top="${opt.marginY || 5668}" bottom="${opt.marginY || 4252}"/></hp:pagePr>` +
     `<hp:footNotePr><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>` +
       `<hp:noteLine length="-1" type="SOLID" width="0.12 mm" color="#000000"/>` +
       `<hp:noteSpacing betweenNotes="850" belowLine="567" aboveLine="850"/>` +
@@ -111,19 +112,102 @@ function secPr() {
 }
 
 /** 문단 하나. kind: 'title' | 'body' | 'small' */
-function para(id, text, kind = 'body', first = false) {
-  const charPr = kind === 'title' ? 1 : kind === 'small' ? 2 : 0;
-  const paraPr = kind === 'title' ? 1 : 0;
-  const inner = first
-    ? `${secPr()}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>`
-    : '';
+function para(id, text, kind = 'body', first = false, opt = {}) {
+  const charPr = kind === 'title' || kind === 'banner' ? 1 : kind === 'small' ? 2 : 0;
+  const paraPr = kind === 'title' || kind === 'banner' ? 1 : 0;
+  const inner = first ? firstCtrl(opt) : '';
   const t = text ? `<hp:t>${esc(text)}</hp:t>` : '<hp:t></hp:t>';
   return `<hp:p id="${id}" paraPrIDRef="${paraPr}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
     `<hp:run charPrIDRef="${charPr}">${inner}${t}</hp:run>${LINESEG}</hp:p>`;
 }
 
-function sectionXml(blocks) {
-  const body = blocks.map((b, i) => para(i, b.text, b.kind, i === 0)).join('');
+// ── 표(hp:tbl) ─────────────────────────────────────────────
+// A4 세로, HWPUNIT(1/7200인치) 기준. 210mm = 59528.
+const PAGE_W = 59528;
+const PAGE_H = 84188;
+
+/** 칸 배치를 격자에 앉혀 colAddr/rowAddr 을 구한다. 세로 병합된 자리는 건너뛴다. */
+function layoutCells(rows, colCount) {
+  const taken = new Set();
+  return rows.map((row, r) => {
+    let c = 0;
+    return row.map((raw) => {
+      const x = cellOf(raw);
+      while (taken.has(`${r},${c}`) && c < colCount) c++;
+      const at = { ...x, r, c };
+      for (let dr = 0; dr < x.rowSpan; dr++) {
+        for (let dc = 0; dc < x.colSpan; dc++) taken.add(`${r + dr},${c + dc}`);
+      }
+      c += x.colSpan;
+      return at;
+    });
+  });
+}
+
+function tblXml(t, opt, id) {
+  const fs = opt.fontSize || 11;
+  const usable = PAGE_W - (opt.marginX || 4251) * 2;
+  const head = (t.head || []).length ? [t.head] : [];
+  const all = [...head, ...(t.rows || [])];
+  const colCount = (t.cols || []).length
+    || all.reduce((m, r) => Math.max(m, r.reduce((n, c) => n + cellOf(c).colSpan, 0)), 1);
+
+  // 열 너비: 비율(%)을 HWPUNIT 으로 바꾸고 반올림 오차는 마지막 열이 흡수한다.
+  const pct = (t.cols && t.cols.length === colCount) ? t.cols : Array(colCount).fill(100 / colCount);
+  const colW = pct.map((p) => Math.round((usable * p) / 100));
+  colW[colCount - 1] = usable - colW.slice(0, -1).reduce((a, b) => a + b, 0);
+
+  const grid = layoutCells(all, colCount);
+  const lineH = Math.round(fs * 100 * 1.35);
+  const rowH = grid.map((row) => {
+    const n = row.reduce((m, x) => (x.rowSpan === 1 ? Math.max(m, x.t.split('\n').length) : m), 1);
+    return n * lineH + 568;
+  });
+  const tblH = rowH.reduce((a, b) => a + b, 0);
+
+  const span = (arr, from, n) => arr.slice(from, from + n).reduce((a, b) => a + b, 0);
+  const isHead = (r) => head.length && r === 0;
+
+  const trs = grid.map((row, r) => '<hp:tr>' + row.map((x) => {
+    const paras = x.t.split('\n');
+    const paraPr = x.align === 'left' ? 0 : 1;
+    const charPr = isHead(r) ? 3 : 0;
+    const inner = paras.map((line) =>
+      `<hp:p id="2147483648" paraPrIDRef="${paraPr}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+      `<hp:run charPrIDRef="${charPr}"><hp:t>${esc(line)}</hp:t></hp:run>${LINESEG}</hp:p>`).join('');
+    return `<hp:tc name="" header="${isHead(r) ? 1 : 0}" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="2">` +
+      `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">` +
+      inner + `</hp:subList>` +
+      `<hp:cellAddr colAddr="${x.c}" rowAddr="${x.r}"/>` +
+      `<hp:cellSpan colSpan="${x.colSpan}" rowSpan="${x.rowSpan}"/>` +
+      `<hp:cellSz width="${span(colW, x.c, x.colSpan)}" height="${span(rowH, x.r, x.rowSpan)}"/>` +
+      `<hp:cellMargin left="141" right="141" top="141" bottom="141"/></hp:tc>`;
+  }).join('') + '</hp:tr>').join('');
+
+  return `<hp:tbl id="${id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" ` +
+    `lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${grid.length}" colCnt="${colCount}" ` +
+    `cellSpacing="0" borderFillIDRef="2" noAdjust="0">` +
+    `<hp:sz width="${usable}" widthRelTo="ABSOLUTE" height="${tblH}" heightRelTo="ABSOLUTE" protect="0"/>` +
+    `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" ` +
+    `vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+    `<hp:outMargin left="0" right="0" top="0" bottom="141"/>` +
+    `<hp:inMargin left="141" right="141" top="141" bottom="141"/>` +
+    trs + `</hp:tbl>`;
+}
+
+const firstCtrl = (opt) =>
+  `${secPr(opt)}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>`;
+
+/** 표 하나를 담은 문단 */
+function tablePara(id, table, opt, first) {
+  return `<hp:p id="${id}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">` +
+    `<hp:run charPrIDRef="0">${first ? firstCtrl(opt) : ''}${tblXml(table, opt, 1000 + id)}</hp:run>${LINESEG}</hp:p>`;
+}
+
+function sectionXml(blocks, opt = {}) {
+  const body = blocks.map((b, i) => (b.kind === 'table'
+    ? tablePara(i, b.table, opt, i === 0)
+    : para(i, b.text, b.kind, i === 0, opt))).join('');
   return XMLH +
     `<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core">` +
     body + `</hs:sec>`;
@@ -186,37 +270,96 @@ export async function buildHwpx(text, opt = {}) {
     { name: 'META-INF/manifest.xml', data: MANIFEST },
     { name: 'Contents/content.hpf', data: contentHpf(opt.title || '교육활동') },
     { name: 'Contents/header.xml', data: headerXml(opt) },
-    { name: 'Contents/section0.xml', data: sectionXml(blocks) },
+    { name: 'Contents/section0.xml', data: sectionXml(blocks, opt) },
   ]);
+}
+
+/**
+ * 표가 들어간 .hwpx — 주간활동계획 · 월중계획 서식에 쓴다.
+ * @param {Array} blocks  [{kind:'title'|'body'|'small'|'banner', text} | {kind:'table', table}]
+ * @param {object} opt     { title, font, fontSize, marginX, marginY }
+ */
+export async function buildHwpxDoc(blocks, opt = {}) {
+  const list = blocks.length ? blocks : [{ kind: 'body', text: '' }];
+  return zip([
+    { name: 'mimetype', data: 'application/hwp+zip', store: true },
+    { name: 'version.xml', data: VERSION },
+    { name: 'settings.xml', data: SETTINGS },
+    { name: 'META-INF/container.xml', data: CONTAINER },
+    { name: 'META-INF/manifest.xml', data: MANIFEST },
+    { name: 'Contents/content.hpf', data: contentHpf(opt.title || '교육활동') },
+    { name: 'Contents/header.xml', data: headerXml(opt) },
+    { name: 'Contents/section0.xml', data: sectionXml(list, opt) },
+  ]);
+}
+
+/** 칸 하나를 { t, rowSpan, colSpan, align } 꼴로 맞춘다. 글자만 준 경우도 받는다. */
+export function cellOf(c) {
+  if (c && typeof c === 'object') {
+    return { t: String(c.t == null ? '' : c.t), rowSpan: c.rowSpan || 1, colSpan: c.colSpan || 1, align: c.align || 'center' };
+  }
+  return { t: String(c == null ? '' : c), rowSpan: 1, colSpan: 1, align: 'center' };
 }
 
 /**
  * 한글이 확실히 여는 폴백: A4 서식이 들어간 HTML.
  * 한글에서 [불러오기] → 파일 형식 'HTML 문서' 로 열면 표까지 그대로 들어온다.
+ * 표는 { cols(너비 %), head, rows } 이고 칸은 글자 또는 { t, rowSpan, colSpan, align } 이다.
  */
-export function buildHtmlForHwp({ title, paragraphs = [], tables = [], font = '함초롬바탕', fontSize = 11 }) {
-  const tableHtml = tables.map((t) => `
-  <h2>${esc(t.caption || '')}</h2>
-  <table>
-    <thead><tr>${(t.head || []).map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-    <tbody>${(t.rows || []).map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>
-  </table>`).join('\n');
+export function buildHtmlForHwp({
+  title, paragraphs = [], tables = [], blocks = null,
+  font = '함초롬바탕', fontSize = 11, margin = '20mm 15mm', showTitle = true,
+}) {
+  const body = blocks ? blocks.map(blockHtml).join('\n') : [
+    showTitle ? `<h1>${esc(title)}</h1>` : '',
+    paragraphs.map((p) => `<p>${esc(p) || '&nbsp;'}</p>`).join('\n'),
+    tables.map((t) => (t.caption ? `<h2>${esc(t.caption)}</h2>` : '') + tableHtml(t)).join('\n'),
+  ].join('\n');
 
   return `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
-  @page { size: A4 portrait; margin: 20mm 15mm; }
-  body { font-family: "${esc(font)}", "맑은 고딕", serif; font-size: ${fontSize}pt; line-height: 1.6; color:#000; }
+  @page { size: A4 portrait; margin: ${margin}; }
+  body { font-family: "${esc(font)}", "맑은 고딕", serif; font-size: ${fontSize}pt; line-height: 1.5; color:#000; }
   h1 { font-size: ${(fontSize * 1.5).toFixed(0)}pt; text-align: center; margin: 0 0 18pt; }
-  h2 { font-size: ${(fontSize * 1.1).toFixed(0)}pt; margin: 16pt 0 6pt; }
+  h2 { font-size: ${(fontSize * 1.1).toFixed(0)}pt; margin: 14pt 0 5pt; }
   p  { margin: 0 0 2pt; white-space: pre-wrap; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 12pt; }
-  th, td { border: 1px solid #000; padding: 4pt 6pt; font-size: ${(fontSize * 0.95).toFixed(0)}pt; text-align: center; }
+  p.small { font-size: ${(fontSize * 0.9).toFixed(0)}pt; }
+  p.banner { text-align:center; font-weight:700; font-size:${(fontSize * 1.4).toFixed(0)}pt;
+             border:1px solid #000; padding:8pt 4pt; margin:0 0 8pt; line-height:1.4; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; table-layout: fixed; }
+  th, td { border: 1px solid #000; padding: 3pt 4pt; font-size: ${(fontSize * 0.95).toFixed(0)}pt;
+           text-align: center; vertical-align: middle; white-space: pre-wrap; word-break: break-word; }
+  td.l { text-align: left; }
   th { background: #eee; }
 </style></head>
 <body>
-<h1>${esc(title)}</h1>
-${paragraphs.map((p) => `<p>${esc(p) || '&nbsp;'}</p>`).join('\n')}
-${tableHtml}
+${body}
 </body></html>`;
+}
+
+/** 화면 미리보기·인쇄에 쓰는 본문만(문서 껍데기 없이) */
+export function renderBlocksHtml(blocks) {
+  return blocks.map(blockHtml).join('\n');
+}
+
+function blockHtml(b) {
+  if (b.kind === 'table') return tableHtml(b.table);
+  if (b.kind === 'title') return `<h2>${esc(b.text)}</h2>`;
+  if (b.kind === 'banner') return `<p class="banner">${esc(b.text).replace(/\n/g, '<br>')}</p>`;
+  if (b.kind === 'small') return `<p class="small">${esc(b.text) || '&nbsp;'}</p>`;
+  return `<p>${esc(b.text) || '&nbsp;'}</p>`;
+}
+
+function tableHtml(t) {
+  const cells = (r, tag) => r.map((c) => {
+    const x = cellOf(c);
+    const sp = (x.rowSpan > 1 ? ` rowspan="${x.rowSpan}"` : '') + (x.colSpan > 1 ? ` colspan="${x.colSpan}"` : '');
+    const cls = x.align === 'left' ? ' class="l"' : '';
+    return `<${tag}${sp}${cls}>${esc(x.t).replace(/\n/g, '<br>') || '&nbsp;'}</${tag}>`;
+  }).join('');
+  const colgroup = (t.cols || []).length
+    ? `<colgroup>${t.cols.map((w) => `<col style="width:${w}%">`).join('')}</colgroup>` : '';
+  const head = (t.head || []).length ? `<thead><tr>${cells(t.head, 'th')}</tr></thead>` : '';
+  return `<table>${colgroup}${head}<tbody>${(t.rows || []).map((r) => `<tr>${cells(r, 'td')}</tr>`).join('')}</tbody></table>`;
 }
