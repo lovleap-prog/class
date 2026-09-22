@@ -610,7 +610,7 @@ body.dragging-now .band-grid { pointer-events: none; }
 }
 
 /* ── 학사일정 ───────────────────────── */
-.acad-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.acad-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 14px; }
 .acad-list { list-style: none; margin: 0; padding: 0; }
 .acad-item {
   display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center;
@@ -1064,3 +1064,57 @@ body.widget .widget-body { padding-bottom: 16px; }
 }
 .tt-trash-ico { font-size: 17px; }
 @media print { .tt-trash, .sel-bar { display: none; } }
+
+/* ── 학사일정 달력 보기 ───────────────────────────────── */
+/* 목록으로 늘어놓으면 주말·방학·달의 경계가 안 보인다. 달력이 원래 모양이다. */
+.acad-cal-wrap {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 14px;
+}
+.acad-dows { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 3px; }
+.acad-dow {
+  text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); padding: 3px 0;
+}
+.acad-dow.sun { color: var(--danger); }
+.acad-dow.sat { color: var(--brand); }
+.acad-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.acad-cell {
+  min-height: 76px; padding: 3px 4px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--panel);
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+}
+.acad-cell.is-out { opacity: .32; }
+.acad-cell.is-sat, .acad-cell.is-sun { background: var(--panel-2); }
+.acad-cell.is-sun .acad-cell-num { color: var(--danger); }
+.acad-cell.is-sat .acad-cell-num { color: var(--brand); }
+.acad-cell.is-vac {
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--cat-event) 7%, var(--panel)) 0 7px,
+    color-mix(in srgb, var(--cat-event) 12%, var(--panel)) 7px 14px);
+}
+.acad-cell.is-holiday { background: var(--warn-bg); border-color: var(--warn); }
+.acad-cell.is-today { outline: 2px solid var(--brand); outline-offset: -2px; }
+.acad-cell.drop-on { background: color-mix(in srgb, var(--brand) 14%, var(--panel)); }
+.acad-cell-num { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
+.acad-cell-off { font-size: 10.5px; font-weight: 700; color: var(--warn); line-height: 1.2; }
+/* 달력 칸은 좁다. 긴 제목은 두 줄까지만 보이고 나머지는 … 로 줄인다.
+   전체 글자는 마우스를 올리면 뜨고, 목록 보기에서는 그대로 다 보인다. */
+.acad-cell-item {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 11px; line-height: 1.3; cursor: pointer;
+  padding: 1px 3px; border-radius: 3px; background: color-mix(in srgb, var(--brand) 10%, transparent);
+  color: var(--text); word-break: keep-all; overflow-wrap: anywhere;
+}
+.acad-cell-item:hover { background: color-mix(in srgb, var(--brand) 20%, transparent); }
+.acad-cell-item.is-off { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.acad-cell-to { opacity: .7; margin-left: 2px; }
+.chip-vac {
+  background: color-mix(in srgb, var(--cat-event) 14%, transparent);
+  color: var(--cat-event); font-weight: 600;
+}
+/* 목록 보기에서 제목이 한 글자씩 끊기지 않게 */
+.acad-title { word-break: keep-all; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .acad-cal-wrap { grid-template-columns: 1fr; }
+  .acad-cell { min-height: 62px; }
+  .acad-cell-item { font-size: 10.5px; }
+}

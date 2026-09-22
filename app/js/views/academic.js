@@ -1,20 +1,57 @@
 // 학사일정 탭 — 1학기 / 2학기. 한글 파일을 올려 통째로 채운다.
 import { h, openModal, toast, confirmDialog, clear, download } from '../lib/dom.js';
-import { newAcademic, fmtK, parseYmd, today, WEEKDAY } from '../model.js';
+import {
+  newAcademic, fmtK, parseYmd, today, WEEKDAY, addDays, ymd, range, sundayStart, monthEnd,
+} from '../model.js';
 import { list, put, putMany, remove, isAdmin, audit } from '../store.js';
 import {
   parseAcademic, parseAcademicLines, findYear, findSchoolYear,
   parseTermRanges, termOfDate, parseSchoolDays, parseNoMealDays,
 } from '../lib/acadparse.js';
 import { makeDraggable } from '../dragmove.js';
-import { looksLikeHoliday } from '../lib/holidays.js';
+import { looksLikeHoliday, holidayOn } from '../lib/holidays.js';
 import { readHwpx } from '../lib/hwpx-read.js';
 import { readXlsx } from '../lib/xlsx-read.js';
 
 const TERMS = [['1', '1학기'], ['2', '2학기']];
+const VIEWS = [['cal', '\u{1F4C5} 달력'], ['list', '\u2630 목록']];
+
+/**
+ * 방학 구간을 찾는다.
+ *
+ * 학사일정에는 '여름방학식' 과 '개학식' 만 하루씩 적혀 있고 그 사이가 방학이다.
+ * 달력에서 그 구간이 안 보이면 언제부터 언제까지 쉬는지 알 수가 없다.
+ */
+export function vacationRanges(rows) {
+  const opens = /방학식$|종업식$/;
+  const closes = /개학식$|시업식$/;
+  const sorted = rows.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const out = [];
+  let open = null;
+  for (const r of sorted) {
+    const t = String(r.title || '').replace(/\s/g, '');
+    if (open && closes.test(t)) {
+      if (addDays(open.date, 1) <= addDays(r.date, -1)) {
+        out.push({ from: addDays(open.date, 1), to: addDays(r.date, -1), name: open.name });
+      }
+      open = null;
+    } else if (!open && opens.test(t)) {
+      open = { date: r.date, name: t.replace(/식$/, '').replace(/^종업$/, '봄방학') || '방학' };
+    }
+  }
+  // 학년도 끝에서 개학식을 못 만나면 그 학기 마지막까지로 본다.
+  if (open && sorted.length) {
+    const last = sorted[sorted.length - 1].date;
+    if (addDays(open.date, 1) <= last) out.push({ from: addDays(open.date, 1), to: last, name: open.name });
+  }
+  return out;
+}
+
+const vacationOn = (ranges, d) => (ranges.find((v) => d >= v.from && d <= v.to) || {}).name || '';
 
 export function renderAcademic(ctx) {
-  const st = ctx.state.acad || (ctx.state.acad = { term: '1', q: '' });
+  const st = ctx.state.acad || (ctx.state.acad = { term: '1', q: '', view: 'cal' });
+  if (!st.view) st.view = 'cal';
   const admin = isAdmin();
   const refresh = () => ctx.refresh();
   const all = list('academic');
@@ -48,7 +85,11 @@ export function renderAcademic(ctx) {
           class: `seg-btn${st.term === k ? ' on' : ''}`,
           onClick: () => { st.term = k; refresh(); },
         }, label))),
-        h('span', { class: 'muted small' }, `${rows.length}건`)),
+        h('span', { class: 'muted small' }, `${rows.length}건`),
+        h('div', { class: 'seg' }, ...VIEWS.map(([k, label]) => h('button', {
+          class: `seg-btn${st.view === k ? ' on' : ''}`,
+          onClick: () => { st.view = k; refresh(); },
+        }, label)))),
       h('div', { class: 'datebar-actions' },
         admin ? h('button', { class: 'btn btn-primary', onClick: () => openImport(st.term, refresh) }, '파일에서 가져오기') : null,
         admin ? h('button', { class: 'btn btn-sm', onClick: () => openRow(null, st.term, refresh) }, '+ 한 줄 추가') : null,
@@ -66,16 +107,90 @@ export function renderAcademic(ctx) {
 
     h('div', { class: 'row gap' }, search),
 
-    groups.length
-      ? h('div', { class: 'acad-wrap' }, ...groups.map((g) => h('section', { class: 'sec acad-month' },
-        h('div', { class: 'sec-head' },
-          h('h3', {}, `${Number(g.mm.slice(5, 7))}월`),
-          h('span', { class: 'muted small' }, `${g.items.length}건`)),
-        h('ul', { class: 'acad-list' }, ...g.items.map((a) => acadRow(a, admin, refresh))))))
+    rows.length
+      ? (st.view === 'cal'
+        ? calendarView(rows, admin, refresh)
+        : h('div', { class: 'acad-wrap' }, ...groups.map((g) => h('section', { class: 'sec acad-month' },
+          h('div', { class: 'sec-head' },
+            h('h3', {}, `${Number(g.mm.slice(5, 7))}월`),
+            h('span', { class: 'muted small' }, `${g.items.length}건`)),
+          h('ul', { class: 'acad-list' }, ...g.items.map((a) => acadRow(a, admin, refresh)))))))
       : h('div', { class: 'empty' },
         admin ? '학사일정이 없습니다. [파일에서 가져오기] 로 한글 파일을 올려보세요.' : '등록된 학사일정이 없습니다.'),
 
     noMealBox(noMeal, st.term, admin, refresh));
+}
+
+/**
+ * 달력 보기 — 학교가 쓰는 학사일정 문서가 원래 이 모양이다.
+ *
+ * 목록으로 늘어놓으면 주말이 어디인지, 방학이 언제부터인지, 한 달이 어디서
+ * 끊기는지 알 수가 없다. 달력으로 보면 그것이 전부 자리로 드러난다.
+ */
+function calendarView(rows, admin, refresh) {
+  const vac = vacationRanges(rows);
+  const byDay = new Map();
+  for (const r of rows) {
+    // 기간 일정은 시작한 날에 한 번만. 끝날은 제목 옆에 붙인다.
+    const k = r.date;
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k).push(r);
+  }
+
+  const months = [...new Set(rows.map((r) => String(r.date).slice(0, 7)))].sort();
+  const t = today();
+
+  return h('div', { class: 'acad-cal-wrap' }, ...months.map((mm) => {
+    const first = `${mm}-01`;
+    const last = monthEnd(first);
+    const ws = sundayStart(first);
+    const we = addDays(sundayStart(last), 6);
+    const vacHere = vac.filter((v) => v.from <= last && v.to >= first);
+
+    return h('section', { class: 'sec acad-cal' },
+      h('div', { class: 'sec-head' },
+        h('h3', {}, `${Number(mm.slice(5, 7))}월`),
+        vacHere.length
+          ? h('span', { class: 'chip chip-vac' },
+            vacHere.map((v) => `${v.name} ${fmtK(v.from, { year: false, weekday: false })}~${fmtK(v.to, { year: false, weekday: false })}`).join(' · '))
+          : null),
+      h('div', { class: 'acad-dows' }, ...WEEKDAY.map((w, i) => h('span', {
+        class: `acad-dow${i === 0 ? ' sun' : ''}${i === 6 ? ' sat' : ''}`,
+      }, w))),
+      h('div', { class: 'acad-grid' }, ...range(ws, we).map((d) => {
+        const out = d.slice(0, 7) !== mm;
+        const wd = parseYmd(d).getDay();
+        const off = holidayOn(d);
+        const vname = vacationOn(vac, d);
+        const items = byDay.get(d) || [];
+        return h('div', {
+          class: `acad-cell${out ? ' is-out' : ''}${wd === 0 ? ' is-sun' : ''}${wd === 6 ? ' is-sat' : ''}`
+            + `${off ? ' is-holiday' : ''}${vname ? ' is-vac' : ''}${d === t ? ' is-today' : ''}`,
+          dataset: { day: d },
+          title: [off, vname].filter(Boolean).join(' · '),
+        },
+          h('span', { class: 'acad-cell-num' }, parseYmd(d).getDate()),
+          // 휴일 이름이 그 날 행사 제목과 같으면 한 번만 보인다.
+          // ('삼일절' 이 위아래로 두 번 찍히던 것)
+          off && !items.some((x) => String(x.title).trim() === off)
+            ? h('span', { class: 'acad-cell-off' }, off) : null,
+          ...items.map((a) => makeDraggable(h('span', {
+            class: `acad-cell-item${a.isHoliday || looksLikeHoliday(a.title) ? ' is-off' : ''}`,
+            title: admin ? `${a.title} — 끌어서 옮기기` : a.title,
+            onClick: () => { if (admin) openRow(a, a.term, refresh); },
+          },
+            a.title,
+            a.endDate && a.endDate > a.date
+              ? h('span', { class: 'acad-cell-to' }, `~${parseYmd(a.endDate).getDate()}`)
+              : null),
+          { id: a.id, canDrag: admin, onDrop: async (cell) => {
+            if (!cell.dataset.day || cell.dataset.day === a.date) return;
+            await put('academic', { ...a, date: cell.dataset.day });
+            toast(`${fmtK(cell.dataset.day, { year: false })} 로 옮겼습니다.`, 'ok');
+            refresh();
+          } })));
+      })));
+  }));
 }
 
 /** 수업일수 요약 — 원본 문서 맨 위에 있는 그 표 */
