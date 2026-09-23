@@ -1,7 +1,7 @@
 // 방과후학교 탭 — 강좌를 표로 깔끔하게 보여주고, 표 그대로 한글/엑셀로 내보낸다.
-import { h, openModal, toast, confirmDialog } from '../lib/dom.js';
+import { h, openModal, toast, confirmDialog, stackOnPhone } from '../lib/dom.js';
 import { WEEKDAY, newAfterSchool } from '../model.js';
-import { list, put, remove, audit, currentUser } from '../store.js';
+import { list, put, remove, audit, currentUser, isAdmin } from '../store.js';
 import { openAfterSchoolExport } from '../ui/exporter.js';
 
 const COLS = [
@@ -20,6 +20,8 @@ const COLS = [
 export function renderAfterSchool(ctx) {
   const all = list('afterschool');
   const refresh = () => ctx.refresh();
+  // 선생님은 보기만 한다. 강좌를 넣고 고치는 것은 관리자 몫이다(서버 규칙도 그렇게 막혀 있다).
+  const admin = isAdmin();
 
   let filterWd = ctx.state.asWeekday ?? -1;
   const shown = all
@@ -39,7 +41,7 @@ export function renderAfterSchool(ctx) {
         h('span', { class: 'muted small' }, totalEnrolled ? `수강 ${totalEnrolled}명` : '')),
       h('div', { class: 'datebar-actions' },
         h('button', { class: 'btn', onClick: () => openAfterSchoolExport(shown) }, '표 내보내기'),
-        h('button', { class: 'btn btn-primary', onClick: () => openProgramForm(null, refresh) }, '+ 강좌 추가'))),
+        admin ? h('button', { class: 'btn btn-primary', onClick: () => openProgramForm(null, refresh) }, '+ 강좌 추가') : null)),
 
     h('div', { class: 'seg' },
       ...[['전체', -1], ...WEEKDAY.map((w, i) => [w, i]).slice(1, 6)].map(([label, wd]) =>
@@ -50,11 +52,11 @@ export function renderAfterSchool(ctx) {
 
     shown.length
       ? h('div', { class: 'table-wrap' },
-        h('table', { class: 'tbl tbl-zebra' },
-          h('thead', {}, h('tr', {}, ...COLS.map(([t]) => h('th', {}, t)), h('th', {}, ''))),
+        stackOnPhone(h('table', { class: 'tbl tbl-zebra' },
+          h('thead', {}, h('tr', {}, ...COLS.map(([t]) => h('th', {}, t)), admin ? h('th', {}, '') : null)),
           h('tbody', {}, ...shown.map((p) => h('tr', { class: p.active === false ? 'row-off' : '' },
             ...COLS.map(([, get, cls]) => h('td', { class: cls || '' }, get(p))),
-            h('td', { class: 'nowrap' },
+            !admin ? null : h('td', { class: 'nowrap' },
               h('button', { class: 'icon-btn', title: '수정', onClick: () => openProgramForm(p, refresh) }, '✎'),
               h('button', {
                 class: 'icon-btn danger', title: '삭제',
@@ -64,8 +66,10 @@ export function renderAfterSchool(ctx) {
                   await remove('afterschool', p.id);
                   toast('삭제했습니다.', 'ok'); refresh();
                 },
-              }, '✕')))))))
-      : h('div', { class: 'empty' }, '등록된 강좌가 없습니다. [불러오기] 탭에서 엑셀·hwpx 표를 통째로 올릴 수도 있습니다.'));
+              }, '✕')))))), 3))
+      : h('div', { class: 'empty' }, admin
+        ? '등록된 강좌가 없습니다. [불러오기] 탭에서 엑셀·hwpx 표를 통째로 올릴 수도 있습니다.'
+        : '등록된 강좌가 없습니다.'));
 }
 
 const field = (label, input, hint) =>

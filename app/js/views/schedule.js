@@ -496,10 +496,10 @@ export function renderDaily(ctx) {
     slots.length
       ? foldSection('daily-tt', `교과교담·특별실 ${slots.length}칸`,
         timetableGrid(slots, clash),
-        isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, '시간표 관리') : null)
+        h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, isAdmin() ? '시간표 관리' : '주간 시간표'))
       : null,
     section('방과후학교', [afterSchoolTableNode(after)],
-      isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리') : null),
+      h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, isAdmin() ? '강좌 관리' : '강좌 전체')),
 
     rejected.length ? section('반려된 일정', rejected.map((a) => activityCard(a, { onChange: rerender }))) : null,
 
