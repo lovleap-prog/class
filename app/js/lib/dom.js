@@ -27,6 +27,40 @@ function append(el, children) {
   }
 }
 
+/**
+ * 이름표 붙은 칩 한 줄. [['대상', '2,4년'], ['장소', 'AI교실'], ...] 을 받아 빈 값은 건너뛴다.
+ * 테두리 상자만 늘어놓으면 '꿈자람반' 이 대상인지 장소인지, '정미래' 가 담당인지 알 길이 없다.
+ */
+export function labeledChips(pairs) {
+  const on = pairs.filter(([, v]) => v);
+  if (!on.length) return null;
+  return h('div', { class: 'chips labeled' },
+    ...on.map(([k, v]) => h('span', { class: 'chip-l' }, h('i', {}, k), v)));
+}
+
+/**
+ * 휴대전화에서 표를 '한 줄 = 카드 하나' 로 보이게 한다. 컴퓨터에서는 그대로 표다.
+ *
+ * 여섯 칸짜리 표를 좁은 폭에 억지로 넣으면 '과/학/실', '외/부/강/사' 처럼 한 글자씩
+ * 세로로 떨어진다. 앞의 lead 칸은 제목 줄(이름표 없이), 나머지는 머리 글자를 이름표로
+ * 달아 다음 줄에 늘어놓는다. 빈 칸은 휴대전화에서 뺀다.
+ */
+export function stackOnPhone(table, lead = 1) {
+  const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+  table.classList.add('tbl-cards');
+  for (const tr of table.querySelectorAll('tbody tr')) {
+    const cells = [...tr.children];
+    cells.forEach((td, i) => {
+      if (i < lead) td.classList.add('tc-lead');
+      else if (heads[i]) td.dataset.label = heads[i];
+      if (!td.textContent.trim()) td.classList.add('tc-empty');
+    });
+    // 제목 줄과 이름표 줄 사이의 줄바꿈. 컴퓨터에서는 보이지 않는다.
+    if (cells[lead]) tr.insertBefore(h('td', { class: 'tc-br', 'aria-hidden': 'true' }), cells[lead]);
+  }
+  return table;
+}
+
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 

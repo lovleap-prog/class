@@ -23,6 +23,11 @@ export function renderSettings(ctx) {
   // 여기서 고칠 수 있게 두면, 스스로 '관리자' 로 바꿔 놓고 왜 저장이 안 되는지
   // 헤매게 된다(규칙이 막으므로 실제로 되지는 않는다).
   const shared = backendKind() === 'firestore';
+  // 학교 전체 방식에서 교사는 내 정보·앱 판 확인·설치 안내만 본다. 나머지는 학교 설정이라
+  // 관리자가 고친다. 교사에게 열어 두면 [저장 위치] 를 잘못 바꿔 자료가 '사라진' 것처럼
+  // 보이거나, 규칙에 막혀 저장이 안 되는 단추를 누르게 된다.
+  // 혼자 쓰는 방식(로컬)은 그 컴퓨터 주인이 곧 관리자다. 거기서 파이어베이스로 넘어가므로 다 보인다.
+  const full = !shared || isAdmin();
 
   // ── 사용자 ──
   const nameIn = h('input', { class: 'input', value: me.name || '', placeholder: '예) 김민수' });
@@ -125,12 +130,12 @@ export function renderSettings(ctx) {
           h('div', { class: 'span2' }, field('역할', roleSel,
             '관리자만 승인·반려·오기재 수정을 할 수 있습니다.')))),
 
-    box('학교 정보', h('div', { class: 'form-grid' },
+    full && box('학교 정보', h('div', { class: 'form-grid' },
       field('학교명', schoolIn),
       field('결재선 표기', principalIn),
       h('div', { class: 'span2' }, field('안내 문의처', contactIn, '메신저 안내문 맨 아래에 들어갑니다.')))),
 
-    box('자료 저장 방식', h('div', {},
+    full && box('자료 저장 방식', h('div', {},
       h('div', { class: 'form-grid' }, h('div', { class: 'span2' }, field('저장 위치', backendSel))),
       h('p', { class: 'note' },
         '현재 연결: ', h('strong', {}, backendKind() === 'firestore' ? 'Firebase 실시간 공유' : '이 컴퓨터(로컬)'),
@@ -148,9 +153,9 @@ export function renderSettings(ctx) {
       ? box(`명단 · 승인 (${list('members').filter((m) => !m.approved).length}명 대기)`, membersBox(ctx))
       : null,
 
-    box('담당자 자동 매칭 (업무분장표 · 과거 계획 학습)', staffBox(ctx)),
+    full && box('담당자 자동 매칭 (업무분장표 · 과거 계획 학습)', staffBox(ctx)),
 
-    box('바로가기 링크', h('div', {},
+    full && box('바로가기 링크', h('div', {},
       h('p', { class: 'note' },
         '머리말 오른쪽에 버튼으로 걸립니다. 학교 노션 자료실, 업무포털 주소 등을 넣으세요. ',
         '새 창에서 열리며, ', h('strong', {}, '접근 권한이 없는 분은 그쪽에서 막히므로'),
@@ -194,13 +199,13 @@ export function renderSettings(ctx) {
           '여기서 넣은 값은 이 컴퓨터에만 저장됩니다. 모든 선생님에게 똑같이 보이게 하려면 ',
           h('code', {}, 'app/js/config.js'), ' 의 ', h('code', {}, 'links'), ' 를 고쳐 배포하세요.'))),
 
-    box('시정표 (기본 · 단축 · 수업공개)', bellsBox(ctx)),
+    full && box('시정표 (기본 · 단축 · 수업공개)', bellsBox(ctx)),
 
-    box('결재용 한글 문서', h('div', { class: 'form-grid' },
+    full && box('결재용 한글 문서', h('div', { class: 'form-grid' },
       field('글꼴', fontIn),
       field('글자 크기(pt)', sizeIn))),
 
-    box('교과교담 한 줄로 묶기', h('div', {},
+    full && box('교과교담 한 줄로 묶기', h('div', {},
       h('p', { class: 'note' },
         '[일일] 화면의 교과교담 표에서 한 자리에 세울 과목들입니다. ',
         '전담 선생님 한 분이 도덕·과학·체육을 함께 맡으면 세 과목이 한 줄에 서야 읽기 좋습니다. ',
@@ -209,7 +214,7 @@ export function renderSettings(ctx) {
       h('p', { class: 'muted small' },
         '시간표 칸에 담당 선생님 이름을 적어 두었다면 그쪽이 먼저입니다. 같은 분이 맡은 것은 저절로 한 줄에 섭니다.'))),
 
-    box('둘러보기용 예시 자료', h('div', {},
+    full && box('둘러보기용 예시 자료', h('div', {},
       h('p', { class: 'note' },
         '이번 주 일정·반복일정·방과후 강좌 예시를 한 번에 넣어 화면이 어떻게 보이는지 확인할 수 있습니다. ',
         '예시 자료만 골라서 한 번에 지울 수 있으니 실제 자료와 섞이지 않습니다.'),
@@ -232,7 +237,7 @@ export function renderSettings(ctx) {
           },
         }, '예시 자료만 지우기')))),
 
-    box('백업 · 복원', h('div', { class: 'row gap' },
+    full && box('백업 · 복원', h('div', { class: 'row gap' },
       h('button', {
         class: 'btn', onClick: () => {
           const data = JSON.stringify(exportAll(), null, 2);
@@ -256,7 +261,7 @@ export function renderSettings(ctx) {
         h('li', {}, '휴대전화는 크롬/사파리에서 ', h('strong', {}, '홈 화면에 추가'), ' 를 누르면 됩니다.')),
       h('p', { class: 'muted small' }, '설치해도 자료는 서버에 있으므로, 어느 기기에서 고쳐도 모두에게 바로 반영됩니다(Firebase 사용 시).'))),
 
-    h('div', { class: 'submit-bar' },
+    full && h('div', { class: 'submit-bar' },
       h('button', {
         class: 'btn btn-primary',
         onClick: () => {

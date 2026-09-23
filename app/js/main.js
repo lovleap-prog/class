@@ -6,7 +6,7 @@ import {
   initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind,
   signIn, signOut, needsSignIn, isApproved, pruneAudit,
 } from './store.js';
-import { today, fmtK, weekStart, addDays, monthStart, monthEnd } from './model.js';
+import { today, fmtK, addDays } from './model.js';
 import { renderDaily, renderWeekly, renderMonthly } from './views/schedule.js';
 import { renderRecurring } from './views/recurring.js';
 import { renderTimetable } from './views/timetable.js';
@@ -18,7 +18,7 @@ import { renderAfterSchool } from './views/afterschool.js';
 import { renderApprovals } from './views/approvals.js';
 import { renderImporter } from './views/importer.js';
 import { renderSettings } from './views/settings.js';
-import { countPendingInRange, dayBundle } from './select.js';
+import { dayBundle, pendingList, myPendingCount } from './select.js';
 import { isChecked, toggleCheck } from './checks.js';
 import { openDayExport } from './ui/exporter.js';
 import { ROLE } from './model.js';
@@ -37,19 +37,28 @@ const TABS = [
   ['settings', '설정', renderSettings],
 ];
 
+// 교사가 쓰는 탭. 나머지(시간표·반복일정·방과후·학사일정·불러오기)는 관리자가 고치는
+// 곳이라, 교사에게 열어 두면 들어가서 할 일이 없거나 잘못 눌러 헷갈리기만 한다.
+// 교사가 보는 교과교담·방과후·학사일정은 [일일]·[주간]·[월간] 안에 이미 다 나온다.
+const TEACHER_TABS = new Set(['daily', 'weekly', 'monthly', 'trips', 'approvals', 'settings']);
+const visibleTabs = () => TABS.filter(([k]) => isAdmin() || TEACHER_TABS.has(k));
+// 교사에게 '승인함' 은 맞지 않는 이름이다. 교사는 승인하지 않고 제출한다.
+const tabLabel = (key, label) => (key === 'approvals' && !isAdmin() ? '내 제출' : label);
+
 const state = {
   tab: 'daily',
   date: today(),
   state: {},   // 각 화면이 쓰는 임시 상태
   memoOpen: (() => { try { return !!localStorage.getItem('sam.memoOpen'); } catch { return false; } })(),
   userMenu: false,   // 머리말 이름 단추를 눌러 연 상태
+  moreOpen: false,   // 휴대전화 아래 탭바의 [관리] 를 펼친 상태
 };
 
 const ctx = {
   get date() { return state.date; },
   get state() { return state.state; },
   setDate(d) { state.date = d; render(); },
-  go(tab) { state.tab = tab; syncHash(); render(); },
+  go(tab) { state.tab = tab; state.moreOpen = false; syncHash(); render(); },
   refresh() { render(); },
 };
 
@@ -150,8 +159,9 @@ function header(opt = {}) {
   cfg = loadConfig();
   const me = currentUser();
   const bare = !!opt.bare;
-  const from = monthStart(state.date), to = monthEnd(state.date);
-  const pend = bare ? 0 : countPendingInRange(from, to);
+  // 탭의 숫자는 그 탭 안에 보이는 건수와 같아야 한다.
+  // 관리자: 학교 전체 대기. 교사: 내가 낸 대기만.
+  const pend = bare ? 0 : (isAdmin() ? pendingList().length : myPendingCount(me.name));
 
   return h('header', { class: 'top' },
     h('div', { class: 'brand' },
@@ -166,16 +176,16 @@ function header(opt = {}) {
       ...(bare ? [] : [
         memoButton(),
         h('button', {
-          class: 'btn btn-sm', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
+          class: 'btn btn-sm widget-btn', title: '작은 창으로 띄우기 (바탕화면 한쪽에 두고 보기 좋습니다)',
           onClick: openWidget,
         }, '위젯 창'),
         userMenu(me),
       ])),
     bare ? null : h('nav', { class: 'tabs' },
-      ...TABS.map(([key, label]) => h('button', {
+      ...visibleTabs().map(([key, label]) => h('button', {
         class: `tab${state.tab === key ? ' on' : ''}`,
         onClick: () => ctx.go(key),
-      }, label,
+      }, tabLabel(key, label),
         key === 'approvals' && pend ? h('span', { class: 'tab-badge' }, pend) : null))));
 }
 
@@ -330,8 +340,63 @@ function render() {
   const gate = authGate();
   if (gate) { mount(app, header({ bare: true }), h('main', { class: 'main' }, gate)); return; }
 
+  // 주소창이나 예전 바로가기로 관리 탭에 들어온 교사는 일일로 돌려보낸다.
+  if (!visibleTabs().some(([k]) => k === state.tab)) { state.tab = 'daily'; syncHash(); }
   const tab = TABS.find(([k]) => k === state.tab) || TABS[0];
-  mount(app, header(), h('main', { class: 'main' }, tab[2](ctx)), memoDock());
+  mount(app, header(), h('main', { class: 'main' }, tab[2](ctx)), memoDock(), bottomNav());
+}
+
+// 아래 탭바의 선 그림. 글자만으로는 엄지로 누를 자리가 작다.
+const NAV_ICON = {
+  daily: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  weekly: '<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  monthly: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 13h2M12 13h2M16 13h1M8 16h2M12 16h2"/>',
+  trips: '<path d="M5 16l2-6h10l2 6M4 16h16v3H4zM7 19v1M17 19v1"/>',
+  approvals: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 12l2 2 4-4"/>',
+  more: '<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>',
+};
+// 관리자가 [관리] 로 펴는 탭들
+const MORE_TABS = ['timetable', 'recurring', 'afterschool', 'academic', 'trips', 'import', 'settings'];
+
+/**
+ * 휴대전화 아래 탭바. 컴퓨터에서는 보이지 않는다(CSS).
+ *
+ * 위 탭 줄은 폭이 785px 인데 휴대전화 화면은 366px 이라 여섯째 탭부터 옆으로 밀어야
+ * 나왔고, 밀 수 있다는 표시도 없었다. 엄지가 닿는 아래로 내리고 다섯 칸으로 줄인다.
+ * 교사: 오늘·이번 주·이번 달·출장·내 제출. 관리자: 넷째가 승인함, 다섯째 [관리] 가 나머지를 편다.
+ * 설정은 머리말의 이름 단추로 간다.
+ */
+function bottomNav() {
+  const me = currentUser();
+  const pend = isAdmin() ? pendingList().length : myPendingCount(me.name);
+  const items = isAdmin()
+    ? [['daily', '오늘'], ['weekly', '이번 주'], ['monthly', '이번 달'], ['approvals', '승인함'], ['more', '관리']]
+    : [['daily', '오늘'], ['weekly', '이번 주'], ['monthly', '이번 달'], ['trips', '출장'], ['approvals', '내 제출']];
+  const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NAV_ICON[k]}</svg>`;
+
+  return h('div', { class: 'bnav-wrap' },
+    isAdmin() && state.moreOpen
+      ? h('div', { class: 'bnav-sheet', role: 'menu' },
+        ...TABS.filter(([k]) => MORE_TABS.includes(k)).map(([k, label]) => h('button', {
+          class: `bnav-sheet-item${state.tab === k ? ' on' : ''}`, role: 'menuitem',
+          onClick: () => ctx.go(k),
+        }, label)))
+      : null,
+    h('nav', { class: 'bnav', 'aria-label': '화면 이동' },
+      ...items.map(([k, label]) => {
+        const on = k === 'more' ? (state.moreOpen || MORE_TABS.includes(state.tab)) : state.tab === k;
+        return h('button', {
+          class: `bnav-item${on ? ' on' : ''}`,
+          'aria-current': on && k !== 'more' ? 'page' : null,
+          'aria-expanded': k === 'more' ? String(state.moreOpen) : null,
+          onClick: () => {
+            if (k === 'more') { state.moreOpen = !state.moreOpen; render(); } else ctx.go(k);
+          },
+        },
+        h('span', { class: 'bnav-ico', html: svg(k) }),
+        h('span', { class: 'bnav-label' }, label,
+          k === 'approvals' && pend ? h('i', { class: 'bnav-badge' }, pend) : null));
+      })));
 }
 
 /**

@@ -1,8 +1,10 @@
 // 일정 입력/수정 모달. 교사가 쓰면 '확인 대기', 관리자가 쓰면 바로 승인 가능.
 import { h, openModal, toast } from '../lib/dom.js';
-import { CATEGORY, STATUS, newActivity, today } from '../model.js';
+import { CATEGORY, STATUS, newActivity, today, fmtK, parseYmd, range } from '../model.js';
 import { put, audit, currentUser, isAdmin } from '../store.js';
-import { bellList, defaultBell, dayBellId, bellById } from '../conflict.js';
+import { bellList, clashReasons } from '../conflict.js';
+import { holidayOn } from '../lib/holidays.js';
+import { occupancyOn } from '../select.js';
 
 const field = (label, input, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input,
@@ -16,6 +18,9 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
 
   const inp = {};
   const mk = (key, attrs = {}) => (inp[key] = h('input', { class: 'input', value: a[key] || '', ...attrs }));
+  // 새로 쓸 때 담당·부서는 내 이름·부서로 미리 채운다. 비워 두면 어차피 내 이름으로 저장되는데,
+  // 칸에 안 보이니 선생님마다 매번 제 이름을 다시 치고 있었다.
+  if (isNew) { a.owner = a.owner || me.name || ''; a.dept = a.dept || me.dept || ''; }
 
   const catSel = h('select', { class: 'input' },
     ...Object.entries(CATEGORY).map(([k, v]) =>
@@ -51,16 +56,28 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
     h('label', { class: 'check' }, busChk, '\u{1F68C} 배차가 필요합니다'),
     busWrap);
 
+  // 여러 날 이어지는 일정은 드물다. 종료일 칸은 켤 때만 연다.
+  const multiChk = h('input', { type: 'checkbox', checked: !!a.endDate });
+  const endWrap = h('div', { class: 'span2 sub-field' });
+  const syncMulti = () => { endWrap.style.display = multiChk.checked ? '' : 'none'; };
+  multiChk.addEventListener('change', syncMulti);
+
+  // 쉬는 날·겹침을 제출 전에 알려 준다. 막지는 않는다(쉬는 날 돌봄·방과후를 적는 학교가 있다).
+  const warnBox = h('div', { class: 'span2 form-warn', role: 'status', 'aria-live': 'polite' });
+
+  // 활동명을 맨 위에 둔다. '무엇을' 이 먼저 떠오르는데 날짜·종료일·시간·분류를 지나야 나왔다.
   const body = h('div', { class: 'form-grid' },
-    field('날짜 *', mk('date', { type: 'date' })),
-    field('종료일', mk('endDate', { type: 'date' }), '여러 날 이어지는 일정만'),
-    field('시간/교시', mk('time', { placeholder: '예) 3교시, 10:00~11:40, 아침활동' })),
-    field('분류', catSel),
     h('div', { class: 'span2' }, field('활동명 *', mk('title', { placeholder: '예) 3학년 소방안전교육' }))),
+    field('날짜 *', mk('date', { type: 'date' })),
+    field('시간/교시', mk('time', { placeholder: '예) 3교시, 10:00~11:40, 아침활동' })),
+    h('label', { class: 'check span2' }, multiChk, '여러 날 이어집니다'),
+    (endWrap.append(field('종료일', mk('endDate', { type: 'date' }))), endWrap),
+    warnBox,
     field('대상', mk('target', { placeholder: '예) 3학년, 전교생' })),
     field('장소', mk('place', { placeholder: '예) 시청각실' })),
     field('담당', mk('owner', { placeholder: '예) 김민수' })),
     field('부서/계', mk('dept', { placeholder: '예) 교무기획부' })),
+    field('분류', catSel),
     bells.length > 1
       ? h('div', { class: 'span2' }, field('시정', bellSel,
         '수업공개처럼 이 활동만 다른 시정으로 움직일 때 고르세요. 비워두면 그 날 시정을 따릅니다.'))
@@ -85,7 +102,7 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
 
         Object.assign(a, {
           date: val('date'),
-          endDate: val('endDate') && val('endDate') > val('date') ? val('endDate') : '',
+          endDate: multiChk.checked && val('endDate') > val('date') ? val('endDate') : '',
           time: val('time'), title: val('title'),
           target: val('target'), place: val('place'),
           owner: val('owner') || (isNew ? me.name : a.owner),
@@ -121,6 +138,47 @@ export function openActivityForm(existing, { onSaved, defaultDate } = {}) {
       },
     },
   ]);
+  // 날짜·시간·장소·대상·담당이 바뀔 때마다 다시 본다.
+  const checkAhead = () => {
+    const date = inp.date.value;
+    const lines = [];
+    if (date) {
+      const last = multiChk.checked && inp.endDate.value > date ? inp.endDate.value : date;
+      const days = range(date, last);
+      const offs = days.map((d) => [d, holidayOn(d)]).filter(([, n]) => n);
+      for (const [d, n] of offs.slice(0, 3)) lines.push(`${fmtK(d, { year: false })}은 ${n}입니다.`);
+      if (offs.length > 3) lines.push(`그 밖에도 쉬는 날이 ${offs.length - 3}일 더 있습니다.`);
+      const w = parseYmd(date).getDay();
+      if (!offs.length && days.length === 1 && (w === 0 || w === 6)) {
+        lines.push(`${fmtK(date, { year: false })}은 주말입니다.`);
+      }
+      // 겹침은 그 날 화면에서 빨갛게 뜨는 것과 같은 기준으로 본다(시간 + 담당·장소·학년).
+      const cand = {
+        id: a.id, date, time: inp.time.value.trim(), bellId: bellSel.value,
+        place: inp.place.value.trim(), target: inp.target.value.trim(), owner: inp.owner.value.trim(),
+      };
+      if (cand.time) {
+        const hits = occupancyOn(date)
+          .filter((o) => o.id !== a.id)
+          .map((o) => [o, clashReasons(cand, o)])
+          .filter(([, why]) => why.length);
+        for (const [o, why] of hits.slice(0, 3)) {
+          // 조사(와/과)는 앞 글자 받침에 따라 달라서 붙이지 않는다.
+          lines.push(`겹침 · ${o.time ? `${o.time} ` : ''}${o.title} (${why.join(', ')})`);
+        }
+        if (hits.length > 3) lines.push(`그 밖에도 ${hits.length - 3}건이 겹칩니다.`);
+      }
+    }
+    warnBox.replaceChildren(...lines.map((t) => h('p', {}, '\u26A0 ', t)));
+    warnBox.hidden = !lines.length;
+  };
+  for (const el of [inp.date, inp.endDate, inp.time, inp.place, inp.target, inp.owner, bellSel, multiChk]) {
+    el.addEventListener('input', checkAhead);
+    el.addEventListener('change', checkAhead);
+  }
+  syncMulti();
+  checkAhead();
+
   setTimeout(() => inp.title && inp.title.focus(), 40);
   return close;
 }

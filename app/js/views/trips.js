@@ -2,7 +2,7 @@
 //
 // 보결은 남이 대신 들어가 줘야 하는 일이라 '몇 교시에 필요한지' 가 핵심이다.
 // 그래서 보결 체크와 메모란을 눈에 띄게 뒀다.
-import { h, openModal, toast, confirmDialog, promptDialog } from '../lib/dom.js';
+import { h, openModal, toast, confirmDialog, promptDialog, labeledChips } from '../lib/dom.js';
 import { newTrip, fmtK, today, addDays, weekStart, STATUS } from '../model.js';
 import { list, put, remove, isAdmin, currentUser, audit } from '../store.js';
 
@@ -80,10 +80,7 @@ function tripCard(x, me, admin, refresh) {
         h('span', { class: 'card-title' }, x.reason || '(사유 없음)'),
         s ? h('span', { class: `badge ${s.cls}` }, s.label) : null,
         x.needsSub ? h('span', { class: 'badge badge-sub' }, '보결 필요') : null),
-      h('div', { class: 'chips' },
-        h('span', { class: 'chip' }, x.applicant),
-        x.dept ? h('span', { class: 'chip' }, x.dept) : null,
-        x.place ? h('span', { class: 'chip' }, x.place) : null),
+      labeledChips([['신청', x.applicant], ['계', x.dept], ['장소', x.place]]),
       x.needsSub
         ? h('p', { class: 'trip-sub' }, '보결: ', x.subNote || h('span', { class: 'warn-text' }, '몇 교시인지 적어주세요'))
         : null,

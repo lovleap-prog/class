@@ -46,8 +46,10 @@ export function periodBundle(from, to, opt = {}) {
   return range(from, to).map((d) => dayBundle(d, opt));
 }
 
-export function countPendingInRange(from, to) {
-  return list('activities').filter((a) => a.status === 'pending' && a.date >= from && a.date <= to).length;
+/** 내가 낸 확인 대기 건수. 교사의 [내 제출] 탭 숫자로 쓴다(그 탭에 보이는 것과 같은 수). */
+export function myPendingCount(name) {
+  if (!name) return 0;
+  return list('activities').filter((a) => a.status === 'pending' && a.createdBy === name).length;
 }
 
 /** 그 날 그 주 시간표에 잡힌 칸들 (교과교담·특별실) */

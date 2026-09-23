@@ -1,5 +1,5 @@
 // 승인함 — 교사 제출 → 확인 대기 → 승인/반려, 관리자의 오기재 수정
-import { h, toast, promptDialog, confirmDialog } from '../lib/dom.js';
+import { h, toast, promptDialog, confirmDialog, labeledChips } from '../lib/dom.js';
 import { fmtK, STATUS } from '../model.js';
 import { pendingList } from '../select.js';
 import { put, audit, list, isAdmin, currentUser, remove } from '../store.js';
@@ -42,13 +42,13 @@ export function renderApprovals(ctx) {
       : h('section', { class: 'sec' },
         h('div', { class: 'sec-head' }, h('h3', {}, '내가 제출한 대기 건')),
         ...(pending.filter((a) => a.createdBy === me.name).length
-          ? pending.filter((a) => a.createdBy === me.name).map((a) => activityCard(a, { onChange: refresh, showStatus: true }))
+          ? pending.filter((a) => a.createdBy === me.name).map((a) => activityCard(a, { onChange: refresh, showStatus: true, showDate: true }))
           : [h('div', { class: 'empty' }, '대기 중인 제출이 없습니다.')])),
 
     h('section', { class: 'sec' },
       h('div', { class: 'sec-head' }, h('h3', {}, isAdmin() ? '최근 처리 이력' : '내 최근 처리 결과')),
       isAdmin() ? auditTable() : (mine.length
-        ? h('div', {}, ...mine.map((a) => activityCard(a, { compact: true, onChange: refresh, showStatus: true })))
+        ? h('div', {}, ...mine.map((a) => activityCard(a, { compact: true, onChange: refresh, showStatus: true, showDate: true })))
         : h('div', { class: 'empty' }, '처리된 내역이 없습니다.'))));
 }
 
@@ -59,10 +59,8 @@ function pendingRow(a, me, refresh) {
       h('div', { class: 'card-title-row' },
         h('span', { class: 'card-title' }, a.title),
         a.time ? h('span', { class: 'chip' }, a.time) : null),
-      h('div', { class: 'chips' },
-        ...[a.target, a.place, a.owner, a.dept].filter(Boolean).map((c) => h('span', { class: 'chip' }, c)),
-        h('span', { class: 'chip ghost' }, `제출: ${a.createdBy || '-'}`),
-        a.source !== 'manual' ? h('span', { class: 'chip ghost' }, srcLabel(a.source)) : null),
+      labeledChips([['대상', a.target], ['장소', a.place], ['담당', a.owner], ['계', a.dept], ['제출', a.createdBy || '-']]),
+      a.source !== 'manual' ? h('div', { class: 'chips' }, h('span', { class: 'chip ghost' }, srcLabel(a.source))) : null,
       a.changeNote ? h('div', {}, h('span', { class: 'change-note' }, a.changeNote)) : null,
       a.detail ? h('p', { class: 'card-detail' }, a.detail) : null,
       a._raw ? h('p', { class: 'card-raw' }, `원문: ${a._raw}`) : null),

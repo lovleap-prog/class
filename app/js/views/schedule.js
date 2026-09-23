@@ -1,5 +1,5 @@
 // 일일 · 주간 · 월간 화면
-import { h, confirmDialog, toast } from '../lib/dom.js';
+import { h, confirmDialog, toast, labeledChips, stackOnPhone } from '../lib/dom.js';
 import {
   CATEGORY, STATUS, WEEKDAY, fmtK, today, addDays, addMonths,
   weekStart, sundayStart, monthStart, monthEnd, range, parseYmd, isWeekend, ymd, occursOn,
@@ -14,7 +14,7 @@ import { isAdmin, put, remove, audit, currentUser, list } from '../store.js';
 import { isChecked, toggleCheck, clearChecks, countChecked } from '../checks.js';
 import { makeDraggable, makeDropTarget, canMove } from '../dragmove.js';
 import { noticeBox } from './notice.js';
-import { boardBox } from './board.js';
+import { boardBox, postsIn } from './board.js';
 import { memoPanel, memoComposer } from './memoview.js';
 import { memosOn, memosBetween } from '../memo.js';
 import { academicOn } from './academic.js';
@@ -37,8 +37,8 @@ export function statusBadge(a, { showAll = false } = {}) {
  * @param checkDate  이 날짜 기준으로 내 체크 상태를 반영한다(빈 값이면 체크 개념 없음)
  * @param showCheck  체크박스를 그릴지. 주간 화면은 상태만 반영하고 체크박스는 안 그린다.
  */
-export function activityCard(a, { compact = false, onChange, checkDate = '', showCheck = false, showStatus = false, clash = null } = {}) {
-  const chips = [a.target, a.place, a.owner, a.dept].filter(Boolean);
+export function activityCard(a, { compact = false, onChange, checkDate = '', showCheck = false, showStatus = false, clash = null, showDate = false } = {}) {
+  const chips = [['대상', a.target], ['장소', a.place], ['담당', a.owner], ['계', a.dept]];
   const canEdit = isAdmin() || a.createdBy === currentUser().name;
   const done = isChecked(checkDate, a);
   const card = h('div', { class: `card cat-${a.category}${a.status === 'pending' ? ' is-pending' : ''}${done ? ' is-done' : ''}${showCheck ? ' has-check' : ''}${clash ? ' is-clash' : ''}` },
@@ -50,7 +50,9 @@ export function activityCard(a, { compact = false, onChange, checkDate = '', sho
         }))
       : null,
     h('div', { class: 'card-time' },
-      describeTime(a) || '—',
+      // 날짜가 섞인 목록(내 제출 등)에서는 날짜를 먼저 적는다. 없으면 어느 날 건지 모른다.
+      showDate && a.date ? h('span', { class: 'card-date' }, fmtK(a.date, { year: false })) : null,
+      describeTime(a) || (showDate ? '' : '—'),
       a.bellId && bellById(a.bellId)
         ? h('span', { class: 'bell-tag' }, bellById(a.bellId).name)
         : null),
@@ -60,7 +62,7 @@ export function activityCard(a, { compact = false, onChange, checkDate = '', sho
         a.isRecurring ? h('span', { class: 'badge st-rec' }, '상시') : statusBadge(a, { showAll: showStatus }),
         a.needsBus ? h('span', { class: 'badge st-bus', title: a.busNote || '배차 필요' }, '\u{1F68C} 배차') : null,
         a.endDate ? h('span', { class: 'badge st-span' }, `~ ${fmtK(a.endDate, { year: false })}`) : null),
-      chips.length ? h('div', { class: 'chips' }, ...chips.map((c) => h('span', { class: 'chip' }, c))) : null,
+      labeledChips(chips),
       clash ? h('p', { class: 'clash-note' }, '\u26A0 ', clashLabel(clash)) : null,
       // 비고는 좁은 칸에서도 보여준다. '1-5교시 · 6-5-3-4-6년 순' 처럼
       // 시간 표기만으로는 알 수 없는 내용이 여기 들어가기 때문이다.
@@ -293,7 +295,7 @@ function spanCard(a, day, onChange) {
     h('span', { class: 'band-meta' },
       `${fmtK(a.date, { year: false })} ~ ${fmtK(a.endDate, { year: false })}`,
       nth > 0 ? ` · ${nth}일째/${days.length}일` : ''),
-    ...[a.target, a.place, a.owner].filter(Boolean).map((c) => h('span', { class: 'chip' }, c)),
+    labeledChips([['대상', a.target], ['장소', a.place], ['담당', a.owner]]),
     (isAdmin() || a.createdBy === currentUser().name)
       ? h('button', {
         class: 'icon-btn', title: '수정',
@@ -369,7 +371,7 @@ function foldSection(key, title, body, extra) {
 export function afterSchoolTableNode(programs) {
   if (!programs.length) return emptyBox('이 날짜에 운영하는 방과후 강좌가 없습니다.');
   return h('div', { class: 'table-wrap' },
-    h('table', { class: 'tbl' },
+    stackOnPhone(h('table', { class: 'tbl' },
       h('thead', {}, h('tr', {},
         ...['시간', '강좌명', '대상', '장소', '강사', '인원'].map((t) => h('th', {}, t)))),
       h('tbody', {}, ...programs.map((p) => h('tr', {},
@@ -378,7 +380,7 @@ export function afterSchoolTableNode(programs) {
         h('td', {}, p.grade || ''),
         h('td', {}, p.room || ''),
         h('td', {}, p.teacher || ''),
-        h('td', {}, [p.enrolled, p.capacity].filter(Boolean).join(' / ') || ''))))));
+        h('td', {}, [p.enrolled, p.capacity].filter(Boolean).join(' / ') || ''))))), 2));
 }
 
 // ── 일일 ───────────────────────────────────────────────────
@@ -425,6 +427,20 @@ export function renderDaily(ctx) {
         : null;
     })(),
 
+    // 오늘 요약 — 아침에 열고 3초 안에 '오늘 나한테 뭐가 있지' 가 보이게.
+    // 보결이 있는 날은 그 칸이 주황으로 선다.
+    (() => {
+      const subs = trips.filter((t) => t.needsSub).length;
+      const posts = postsIn(d, d).length;
+      const tile = (n, label, hot) => h('div', { class: `sum-tile${hot ? ' hot' : ''}` },
+        h('b', {}, n), h('span', {}, label));
+      return h('div', { class: 'sum-strip', role: 'group', 'aria-label': '오늘 요약' },
+        tile(approved.length + spans.length, '교육활동'),
+        tile(slots.length, '교담'),
+        tile(subs, '보결', subs > 0),
+        tile(posts, '공지'));
+    })(),
+
     pending.length
       ? section(`확인 대기 ${pending.length}건`, pending.map((a) => activityCard(a, { onChange: rerender, checkDate: d, clash: cl(a) })),
         isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('approvals') }, '승인함에서 처리') : null)
@@ -447,7 +463,7 @@ export function renderDaily(ctx) {
       return h('section', { class: 'sec sec-acad' },
         h('div', { class: 'sec-head' },
           h('h3', {}, '\u{1F4C5} 학사일정'),
-          h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체')),
+          isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체') : null),
         h('div', { class: 'chips' }, ...acad.map((a) => h('span', { class: 'acad-pill' }, a.title))));
     })(),
 
@@ -475,15 +491,15 @@ export function renderDaily(ctx) {
     section('교육활동', approved.map((a) => activityCard(a, { onChange: rerender, checkDate: d, showCheck: true, clash: cl(a) })),
       progressNode(d, [...spans, ...approved, ...rec], rerender)),
     section('상시·반복 운영', rec.map((a) => recurringRow(a, d, cl(a), rerender)),
-      h('button', { class: 'btn btn-sm', onClick: () => ctx.go('recurring') }, '반복일정 관리')),
+      isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('recurring') }, '반복일정 관리') : null),
 
     slots.length
       ? foldSection('daily-tt', `교과교담·특별실 ${slots.length}칸`,
         timetableGrid(slots, clash),
-        h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, '시간표 관리'))
+        isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('timetable') }, '시간표 관리') : null)
       : null,
     section('방과후학교', [afterSchoolTableNode(after)],
-      h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리')),
+      isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('afterschool') }, '강좌 관리') : null),
 
     rejected.length ? section('반려된 일정', rejected.map((a) => activityCard(a, { onChange: rerender }))) : null,
 
@@ -500,7 +516,10 @@ export function renderDaily(ctx) {
         },
           h('strong', {}, t.applicant),
           t.time ? h('span', { class: 'muted small' }, t.time) : null,
-          t.needsSub ? h('span', { class: 'badge badge-sub' }, '보결') : null)))
+          // 보결을 들어갈 선생님이 알아야 할 건 '몇 교시·몇 반' 이다. 마우스를 올려야
+          // 보이던 것을 칩에 그대로 붙인다(휴대전화에는 마우스가 없다).
+          t.needsSub ? h('span', { class: 'badge badge-sub' }, '보결') : null,
+          t.needsSub ? h('span', { class: 'trip-sub-note' }, t.subNote || '교시 미기재') : null)))
         : h('div', { class: 'empty' }, '이 날짜에 등록된 출장이 없습니다.')),
 
     h('section', { class: 'sec sec-memo' },
@@ -544,14 +563,29 @@ export function renderWeekly(ctx) {
         : null;
     })(),
 
+    catLegend(),
     weekBands(from, to, ctx),
-    h('div', { class: 'week-grid' }, ...days.map((day) => {
-      const b = dayBundle(day, { onlyApproved: false });
+    (() => {
+      // 칸에 실제로 올라갈 것을 먼저 센다. 비었는지, 주말 칸을 넓혀야 하는지가 여기서 갈린다.
+      const cols = days.map((day) => {
+        const b = dayBundle(day, { onlyApproved: false });
+        // 기간 일정은 위쪽 띠에 이미 나와 있으므로 칸 안에서는 뺀다
+        const acts = b.activities.filter((a) => !isSpan(a));
+        // 매일 도는 반복일정은 주마다 스무 번씩 되풀이돼 피로하다.
+        // 반복일정 탭에서 '주간·월간' 을 꺼둔 것은 여기서 뺀다(일일에는 그대로 나온다).
+        const recs = b.recurring.filter((a) => a.showInPlan !== false);
+        return { day, b, acts, recs, empty: !acts.length && !recs.length && !b.afterSchool.length };
+      });
+      // 토·일은 대개 비어 있다. 평일과 같은 폭을 주면 평일 제목이 세 줄로 꺾인다.
+      // 비었으면 평일의 절반, 일정이 있으면 평일만큼.
+      const w = (c) => (c.empty ? 'minmax(0, .5fr)' : 'minmax(0, 1fr)');
+      return h('div', { class: 'week-grid', style: { '--sat': w(cols[5]), '--sun': w(cols[6]) } },
+        ...cols.map(({ day, b, acts, recs, empty }) => {
       const pend = b.activities.filter((a) => a.status === 'pending').length;
       const off = holidayOn(day);
       const col = h('div', {
         class: `week-col${day === today() ? ' is-today' : ''}`
-          + `${isWeekend(day) ? ' is-weekend' : ''}${off ? ' is-holiday' : ''}`,
+          + `${isWeekend(day) ? ' is-weekend' : ''}${off ? ' is-holiday' : ''}${empty ? ' is-empty' : ''}`,
         dataset: { day },
       },
         h('button', {
@@ -563,18 +597,15 @@ export function renderWeekly(ctx) {
           off ? h('span', { class: 'week-off' }, off) : null,
           pend ? h('span', { class: 'dot-pending', title: `확인 대기 ${pend}건` }, pend) : null),
         h('div', { class: 'week-body' },
-          // 기간 일정은 위쪽 띠에 이미 나와 있으므로 칸 안에서는 뺀다
-          ...b.activities.filter((a) => !isSpan(a)).map((a) => activityCard(a, { compact: true, onChange: rerender, checkDate: day })),
-          // 매일 도는 반복일정은 주마다 스무 번씩 되풀이돼 피로하다.
-          // 반복일정 탭에서 '주간·월간' 을 꺼둔 것은 여기서 뺀다(일일에는 그대로 나온다).
-          ...b.recurring.filter((a) => a.showInPlan !== false)
-            .map((a) => activityCard(a, { compact: true, checkDate: day })),
+          ...acts.map((a) => activityCard(a, { compact: true, onChange: rerender, checkDate: day })),
+          ...recs.map((a) => activityCard(a, { compact: true, checkDate: day })),
           b.afterSchool.length
             ? h('div', { class: 'mini-after' }, `방과후 ${b.afterSchool.length}강좌`)
             : null,
-          !b.activities.length && !b.recurring.length ? h('div', { class: 'empty sm' }, '—') : null));
+          empty ? h('div', { class: 'empty sm' }, '—') : null));
       return makeDropTarget(col, day);
-    })));
+    }));
+    })());
 }
 
 function weekBands(from, to, ctx) {
@@ -585,6 +616,15 @@ function weekBands(from, to, ctx) {
   return h('div', { class: 'week-bandwrap' },
     h('div', { class: 'band-label' }, '기간 운영'),
     bandGrid(bands, { onClick: (a) => { ctx.setDate(a.date); ctx.go('daily'); } }));
+}
+
+/**
+ * 분류 색 범례. 카드 왼쪽 띠와 월간 칸의 색이 분류를 뜻하는데 어디에도 적혀 있지 않았다.
+ */
+function catLegend() {
+  return h('div', { class: 'cat-legend', 'aria-label': '분류 색' },
+    ...Object.entries(CATEGORY).map(([k, v]) =>
+      h('span', { class: `cat-key cat-${k}` }, h('i', { 'aria-hidden': 'true' }), v)));
 }
 
 // ── 월간 ───────────────────────────────────────────────────
@@ -612,6 +652,7 @@ export function renderMonthly(ctx) {
         h('button', { class: 'btn', onClick: () => openPeriodExport(first, last, '월중 교육활동계획', 'monthly') }, '월중계획 내보내기'),
       ],
     }),
+    catLegend(),
     h('div', { class: 'month-dows' },
       ...WEEKDAY.map((w, i) => h('div', { class: `month-dow${i === 0 || i === 6 ? ' is-weekend' : ''}` }, w))),
     ...weeks.map((ws) => {
@@ -625,9 +666,11 @@ export function renderMonthly(ctx) {
           // 월간 칸의 '상시 N' 도 계획에 띄우기로 한 것만 센다.
           const rec = recurringOn(day).filter((r) => r.showInPlan !== false);
           const off = holidayOn(day);
+          const wd = parseYmd(day).getDay();
           const cell = h('button', {
             class: `month-cell${out ? ' is-out' : ''}${day === today() ? ' is-today' : ''}`
-              + `${isWeekend(day) ? ' is-weekend' : ''}${off ? ' is-holiday' : ''}`,
+              + `${isWeekend(day) ? ' is-weekend' : ''}${wd === 0 ? ' is-sun' : ''}${wd === 6 ? ' is-sat' : ''}`
+              + `${off ? ' is-holiday' : ''}`,
             dataset: { day },
             onClick: () => goDay(day),
             title: off || '',
@@ -643,7 +686,10 @@ export function renderMonthly(ctx) {
                 : (canMove(a) ? `${a.title} — 끌어서 옮기기` : a.title),
             }, a.needsBus ? h('span', { class: 'bus-dot' }, '\u{1F68C}') : null, a.title), a)),
             acts.length > 3 ? h('span', { class: 'month-more' }, `+${acts.length - 3}`) : null,
-            rec.length ? h('span', { class: 'month-rec' }, `상시 ${rec.length}`) : null);
+            // '상시 1' 로는 무엇인지 알 수 없었다. 무엇인지는 마우스를 올리면 보인다.
+            rec.length
+              ? h('span', { class: 'month-rec', title: rec.map((r) => r.title).join(', ') }, `+ 반복 ${rec.length}`)
+              : null);
           return makeDropTarget(cell, day);
         })),
         bandGrid(bands, { compact: true, onClick: (a) => goDay(a.date) }));
@@ -661,7 +707,7 @@ export function renderMonthly(ctx) {
           h('h3', {}, '\u{1F68C} 배차가 필요한 교육활동 ', h('span', { class: 'sec-count' }, bus.length)),
           h('span', { class: 'muted small' }, '미리 배차를 신청해 주세요')),
         h('div', { class: 'table-wrap' },
-          h('table', { class: 'tbl bus-tbl' },
+          stackOnPhone(h('table', { class: 'tbl bus-tbl' },
             h('thead', {}, h('tr', {},
               h('th', {}, '날짜'), h('th', {}, '교육활동'), h('th', {}, '대상'),
               h('th', {}, '배차 내용'), h('th', {}, '담당'))),
@@ -673,7 +719,7 @@ export function renderMonthly(ctx) {
                 a.status === 'pending' ? h('span', { class: 'badge st-pending' }, '확인 대기') : null),
               h('td', {}, a.target || ''),
               h('td', { class: 'bus-note' }, a.busNote || h('span', { class: 'warn-inline' }, '내용 미기재')),
-              h('td', {}, a.owner || a.dept || ''))))))); 
+              h('td', {}, a.owner || a.dept || ''))))), 2)));
     })(),
 
     noticeBox('focus', mm, {
@@ -696,10 +742,19 @@ export function renderMonthly(ctx) {
 
 // ── 날짜 이동 막대 ──────────────────────────────────────────
 function dateBar(ctx, { label, onPrev, onNext, picker, actions = [] }) {
+  // 날짜 글자를 누르면 날짜 고르는 창을 연다. 휴대전화에서는 날짜 입력 칸을 숨기므로
+  // (첫 화면의 3분의 1을 먹었다) 이것이 날짜를 건너뛰는 길이 된다.
+  const input = picker && picker.querySelector ? picker.querySelector('input[type=date]') : null;
+  const openPick = () => {
+    if (!input) return;
+    try { input.showPicker(); } catch { input.focus(); input.click(); }
+  };
   return h('div', { class: 'datebar' },
     h('div', { class: 'datebar-nav' },
       h('button', { class: 'icon-btn', title: '이전', onClick: onPrev }, '‹'),
-      h('strong', { class: 'datebar-label' }, label),
+      input
+        ? h('button', { class: 'datebar-label as-link', title: '날짜 고르기', onClick: openPick }, label)
+        : h('strong', { class: 'datebar-label' }, label),
       h('button', { class: 'icon-btn', title: '다음', onClick: onNext }, '›'),
       h('button', { class: 'btn btn-sm', onClick: () => ctx.setDate(today()) }, '오늘'),
       picker || null),
