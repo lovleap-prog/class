@@ -40,8 +40,8 @@ const TABS = [
 // 교사가 쓰는 탭. 나머지(시간표·반복일정·방과후·학사일정·불러오기)는 관리자가 고치는
 // 곳이라, 교사에게 열어 두면 들어가서 할 일이 없거나 잘못 눌러 헷갈리기만 한다.
 // 교사가 보는 교과교담·방과후·학사일정은 [일일]·[주간]·[월간] 안에 이미 다 나온다.
-// 시간표·방과후는 선생님도 봐야 한 주 흐름이 잡힌다. 고치는 단추는 각 화면에서 관리자에게만 보인다.
-const TEACHER_TABS = new Set(['daily', 'weekly', 'monthly', 'timetable', 'afterschool', 'trips', 'approvals', 'settings']);
+// 시간표·방과후·학사일정은 선생님도 봐야 흐름이 잡힌다. 고치는 단추는 각 화면에서 관리자에게만 보인다.
+const TEACHER_TABS = new Set(['daily', 'weekly', 'monthly', 'timetable', 'afterschool', 'academic', 'trips', 'approvals', 'settings']);
 const visibleTabs = () => TABS.filter(([k]) => isAdmin() || TEACHER_TABS.has(k));
 // 교사에게 '승인함' 은 맞지 않는 이름이다. 교사는 승인하지 않고 제출한다.
 const tabLabel = (key, label) => (key === 'approvals' && !isAdmin() ? '내 제출' : label);
@@ -358,7 +358,7 @@ const NAV_ICON = {
 };
 // 관리자가 [관리] 로 펴는 탭들
 const MORE_TABS = ['timetable', 'recurring', 'afterschool', 'academic', 'trips', 'import', 'settings'];
-const TEACHER_MORE = ['timetable', 'afterschool', 'trips', 'settings'];
+const TEACHER_MORE = ['timetable', 'afterschool', 'academic', 'trips', 'settings'];
 const moreTabs = () => (isAdmin() ? MORE_TABS : TEACHER_MORE);
 
 /**

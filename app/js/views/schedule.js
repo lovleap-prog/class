@@ -463,7 +463,7 @@ export function renderDaily(ctx) {
       return h('section', { class: 'sec sec-acad' },
         h('div', { class: 'sec-head' },
           h('h3', {}, '\u{1F4C5} 학사일정'),
-          isAdmin() ? h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체') : null),
+          h('button', { class: 'btn btn-sm', onClick: () => ctx.go('academic') }, '학사일정 전체')),
         h('div', { class: 'chips' }, ...acad.map((a) => h('span', { class: 'acad-pill' }, a.title))));
     })(),
 
