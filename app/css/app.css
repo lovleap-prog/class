@@ -1359,3 +1359,18 @@ body.widget .widget-body { padding-bottom: 16px; }
   .week-col.is-empty .week-head { border-bottom: 0; }
   .cat-legend { justify-content: flex-start; margin-top: -4px; }
 }
+
+/* ── 월간 '+N' 펼침 목록 ───────────────── */
+.has-pop { position: relative; align-self: flex-start; cursor: help; border-radius: 4px; padding: 0 3px; }
+.has-pop:hover, .has-pop:focus { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); outline: none; }
+.month-pop {
+  display: none; position: absolute; left: 0; top: calc(100% + 3px); z-index: 30;
+  min-width: 170px; max-width: 240px; padding: 6px 8px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .14); cursor: default;
+}
+.has-pop:hover > .month-pop, .has-pop:focus > .month-pop { display: flex; flex-direction: column; gap: 3px; }
+.month-days > :nth-child(n+6) .month-pop { left: auto; right: 0; }
+.month-pop-item { font-size: 12px; line-height: 1.4; white-space: normal; }
+.month-pop-time { color: var(--muted); margin-right: 5px; font-size: 11px; }
+.month-pop-pend { margin-left: 5px; font-size: 10.5px; color: var(--warn, #b7791f); }

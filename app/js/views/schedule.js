@@ -286,6 +286,16 @@ function timetableGrid(slots, clash) {
     }));
 }
 
+/** 월간 칸의 '+N' — 올리면(또는 눌러 초점이 가면) 가려진 일정을 펼쳐 보인다. */
+function morePop(label, cls, items) {
+  return h('span', { class: `${cls} has-pop`, tabindex: '0' }, label,
+    h('span', { class: 'month-pop', role: 'tooltip' },
+      ...items.map(([time, title, pending]) => h('span', { class: 'month-pop-item' },
+        time ? h('span', { class: 'month-pop-time' }, time) : null,
+        title,
+        pending ? h('span', { class: 'month-pop-pend' }, '대기') : null))));
+}
+
 /** 일일 화면의 기간 일정 — 며칠째인지 함께 보여준다. */
 function spanCard(a, day, onChange) {
   const days = range(a.date, a.endDate);
@@ -685,10 +695,13 @@ export function renderMonthly(ctx) {
                 ? `${a.title} — 배차 필요: ${a.busNote || '(내용 없음)'}`
                 : (canMove(a) ? `${a.title} — 끌어서 옮기기` : a.title),
             }, a.needsBus ? h('span', { class: 'bus-dot' }, '\u{1F68C}') : null, a.title), a)),
-            acts.length > 3 ? h('span', { class: 'month-more' }, `+${acts.length - 3}`) : null,
-            // '상시 1' 로는 무엇인지 알 수 없었다. 무엇인지는 마우스를 올리면 보인다.
+            // 가려진 것은 마우스를 올리면 작은 목록으로 펼친다.
+            // title 풍선은 늦게 뜨고 한 줄로 뭉개져서, 올려도 안 보인다는 말을 들었다.
+            acts.length > 3
+              ? morePop(`+${acts.length - 3}`, 'month-more', acts.slice(3).map((a) => [a.time, a.title, a.status === 'pending']))
+              : null,
             rec.length
-              ? h('span', { class: 'month-rec', title: rec.map((r) => r.title).join(', ') }, `+ 반복 ${rec.length}`)
+              ? morePop(`+ 반복 ${rec.length}`, 'month-rec', rec.map((r) => [r.time, r.title, false]))
               : null);
           return makeDropTarget(cell, day);
         })),

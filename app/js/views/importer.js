@@ -22,6 +22,10 @@ const FIELDS = [
 
 export function renderImporter(ctx) {
   const st = ctx.state.importer || (ctx.state.importer = { rows: [], mode: 'activities', source: 'text' });
+  // 선생님도 제 교육활동을 한꺼번에 올린다. 올린 것은 '확인 대기' 로 들어가 승인 뒤에 달력에 뜬다.
+  // 방과후 강좌·구글시트 연동은 관리자 몫이다(방과후는 서버 규칙도 관리자만 쓴다).
+  const admin = isAdmin();
+  if (!admin) st.mode = 'activities';
   const preview = h('div', { class: 'preview' });
 
   const paste = h('textarea', {
@@ -117,9 +121,9 @@ export function renderImporter(ctx) {
     preview.appendChild(h('div', { class: 'sec-head' },
       h('h3', {}, `미리보기 ${st.rows.length}건`),
       h('div', { class: 'row gap' },
-        h('div', { class: 'seg' },
+        admin ? h('div', { class: 'seg' },
           h('button', { class: `seg-btn${!asMode ? ' on' : ''}`, onClick: () => { st.mode = 'activities'; drawPreview(); } }, '교육활동으로 등록'),
-          h('button', { class: `seg-btn${asMode ? ' on' : ''}`, onClick: () => { st.mode = 'afterschool'; drawPreview(); } }, '방과후 강좌로 등록')),
+          h('button', { class: `seg-btn${asMode ? ' on' : ''}`, onClick: () => { st.mode = 'afterschool'; drawPreview(); } }, '방과후 강좌로 등록')) : null,
         h('button', { class: 'btn btn-sm', onClick: () => { st.rows = []; drawPreview(); } }, '비우기'))));
 
     preview.appendChild(asMode ? afterPreviewTable(st.rows) : activityPreviewTable(st.rows));
@@ -145,7 +149,7 @@ export function renderImporter(ctx) {
           const rows = st.rows.filter((r) => r._include);
           if (!rows.length) return toast('등록할 행을 선택해 주세요.', 'warn');
           if (!asMode && rows.some((r) => !r.date)) return toast('날짜가 빈 행이 있습니다. 채우거나 체크를 해제해 주세요.', 'warn');
-          if (!(await confirmDialog(`${rows.length}건을 등록할까요?`))) return;
+          if (!(await confirmDialog(admin ? `${rows.length}건을 등록할까요?` : `${rows.length}건을 제출할까요? 관리자 승인 뒤에 달력에 반영됩니다.`))) return;
 
           const me = currentUser();
           if (asMode) {
@@ -173,12 +177,12 @@ export function renderImporter(ctx) {
             }));
             await putMany('activities', acts);
             await audit('일괄등록', `${acts.length}건`, null, { count: acts.length, source: st.source, approved: approve });
-            toast(approve ? `${acts.length}건을 등록·승인했습니다.` : `${acts.length}건을 제출했습니다. 승인함에서 확인하세요.`, 'ok');
+            toast(approve ? `${acts.length}건을 등록·승인했습니다.` : `${acts.length}건을 제출했습니다. ${admin ? '승인함' : '[내 제출]'}에서 확인하세요.`, 'ok');
             ctx.go(approve ? 'monthly' : 'approvals');
           }
           st.rows = [];
         },
-      }, asMode ? '방과후 강좌로 등록' : '등록하기')));
+      }, asMode ? '방과후 강좌로 등록' : (admin ? '등록하기' : '제출(확인 요청)'))));
   }
 
   drawPreview();
@@ -205,6 +209,9 @@ export function renderImporter(ctx) {
   };
 
   return h('div', { class: 'view' },
+    admin ? null : h('p', { class: 'note' },
+      '맡은 업무·교육활동을 한꺼번에 올리는 곳입니다. 파일을 올리거나 받은 글을 붙여넣고 [읽어들이기] → ',
+      '표에서 확인·수정 → [제출]. 관리자 승인 뒤에 달력에 반영됩니다. 낸 것은 [내 제출] 에서 볼 수 있습니다.'),
     h('div', { class: 'import-grid' },
       h('section', { class: 'sec' },
         h('div', { class: 'sec-head' }, h('h3', {}, '1. 파일 올리기')),
@@ -221,7 +228,7 @@ export function renderImporter(ctx) {
           }, '읽어들이기'),
           h('button', { class: 'btn', onClick: () => { paste.value = ''; } }, '지우기')))),
 
-    h('section', { class: 'sec' },
+    !admin ? null : h('section', { class: 'sec' },
       h('div', { class: 'sec-head' }, h('h3', {}, '1. 또는 구글시트에서 가져오기')),
       h('p', { class: 'note' },
         '각 계 담당자가 구글시트에 자유롭게 적어두면, 시트의 ',

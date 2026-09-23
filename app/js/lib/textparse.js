@@ -170,9 +170,11 @@ export function extractPlace(line) {
   for (const p of PLACES) {
     // '각 교실', '제2 음악실' 처럼 앞에 붙는 수식어까지 함께 가져간다.
     // (그러지 않으면 '(각 교실)' 에서 '교실' 만 빠져 '(각 )' 이 제목에 남는다)
-    const re = new RegExp(`(?:(?:각|전|제\\s*\\d+|\\d+)\\s*)?${p}`);
+    // 낱말의 일부는 장소가 아니다. '과학실험' 의 '과학실', '대강당' 의 '강당' 을 떼어 가면
+    // 제목이 '험' 처럼 부서졌다. 앞뒤가 한글로 이어지면 건너뛴다(뒤의 '에서·에·으로·로' 는 허용).
+    const re = new RegExp(`(?<![가-힣])((?:(?:각|전|제\\s*\\d+|\\d+)\\s*)?${p})(?:에서|에|으로|로)?(?![가-힣])`);
     const hit = line.match(re);
-    if (hit) return { value: hit[0].trim(), rest: strip(line, hit) };
+    if (hit) return { value: hit[1].trim(), rest: strip(line, hit) };
   }
   return null;
 }
