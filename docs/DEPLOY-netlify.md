@@ -140,11 +140,51 @@ https://app.netlify.com → **Sign up** → **GitHub** 로 가입합니다.
 |---|---|
 | 구글 로그인 창이 뜨자마자 닫힘 | 4번(승인된 도메인)을 안 했습니다 |
 | 화면이 옛날 그대로 | 먼저 **[설정] → 앱 판 확인** 으로 어느 쪽이 낡았는지 가르세요 (위) |
-| **서버 판이 안 올라감** | 넷리파이가 배포를 안 한 것입니다. **Deploys** 탭을 열어 ① 맨 위 배포의 **가지 이름**이 지금 밀어 넣는 가지와 같은지 ② **Published** 인지 (Failed·Building 이면 로그를 보세요) ③ 마지막 배포 시각이 방금 밀어 넣은 때인지 확인하세요. 아무 배포도 안 보이면 **Site configuration → Build & deploy → Continuous deployment** 의 **Production branch** 가 틀린 것입니다 |
+| **서버 판이 안 올라감** | 넷리파이가 배포를 안 한 것입니다. **Deploys** 탭을 열어 ① 맨 위 배포의 **가지 이름**이 지금 밀어 넣는 가지와 같은지 ② **Published** 인지 확인하세요. 아무 배포도 안 보이면 **Site configuration → Build & deploy → Continuous deployment** 의 **Production branch** 가 틀린 것입니다 |
+| **배포가 `Skipped` 로 줄줄이 쌓임** | `Skipped due to account credit usage exceeded` — 그 달 무료 몫을 다 썼습니다. 위 **'넷리파이가 멈췄을 때'** 를 보세요 |
 | `This site is private` 만 뜸 | **2-1번** 의 [Make public] 을 안 눌렀습니다 |
 | 빈 화면 | 배포한 가지가 옛 가지입니다. 0번을 보세요 |
 | `Page not found` | Publish directory 가 `app` 이 아닙니다. `netlify.toml` 이 저장소 뿌리에 있는지 확인 |
 | 자료가 저장은 되는데 남에게 안 보임 | 파이어베이스 설정이 아직입니다. `SETUP-firebase.md` |
+
+## 넷리파이가 멈췄을 때 — 깃허브 페이지로 갓길 내기
+
+**Deploys 목록이 죄다 `Skipped`** 이고 위에 이런 띠가 떠 있으면 배포가 멈춘 것입니다.
+
+> Production deploys are paused because your team has used all of its
+> available credits for this billing cycle.
+
+넷리파이 무료 몫을 그 달에 다 쓴 것입니다. **밀어 넣은 것은 깃허브에 멀쩡히 있고,
+넷리파이만 받아가지 않는 상태**라 코드는 잃지 않습니다. 세 갈래가 있습니다.
+
+| 길 | 드는 것 | 언제 |
+|---|---|---|
+| **① 다음 달까지 기다리기** | 없음 | 청구 주기가 넘어가면 저절로 풀립니다. 그때까지 앱은 옛 판에 멈춥니다 |
+| **② 깃허브 페이지로 옮기기** | 없음 (저장소가 공개일 때) | **바로 됩니다.** 아래를 보세요 |
+| **③ 넷리파이 요금제 올리기** | 돈 | 주소를 그대로 쓰고 싶을 때 |
+
+### ② 깃허브 페이지 — 저장소가 공개면 한도가 없습니다
+
+저장소 **Settings → Pages** 에서 **Source = Deploy from a branch**,
+**Branch = `main` / `/ (root)`** 로 두면 됩니다. 밀어 넣을 때마다 저절로 올라갑니다.
+
+주소는 이렇게 됩니다.
+
+```
+https://<계정>.github.io/<저장소>/
+```
+
+저장소 뿌리의 `index.html` 이 `app/` 으로 넘겨주므로 **주소 끝에 `app` 을 붙이지 않아도**
+앱이 열립니다. (넷리파이는 `app/` 을 뿌리로 삼으니 이 파일을 쓰지 않습니다. 둘이 안 부딪힙니다.)
+
+**옮긴 뒤 반드시 할 것 두 가지**
+
+1. **파이어베이스 → Authentication → Settings → 승인된 도메인**에 `<계정>.github.io` 를 더합니다.
+   **안 하면 구글 로그인 창이 뜨자마자 닫힙니다.**
+2. 선생님들께 새 주소를 알리고 **다시 [앱으로 설치]** 하시게 합니다.
+   예전 아이콘은 옛 주소를 가리켜 그대로 두면 옛 화면이 열립니다.
+
+넷리파이가 다시 살아나면 그쪽 주소도 그대로 돌아옵니다. 둘을 같이 두어도 됩니다.
 
 ## 깃허브 페이지는 어떻게 되나
 

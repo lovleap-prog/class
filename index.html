@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  저장소 뿌리에 두는 안내 겸 되보내기 장.
+
+  넷리파이는 app/ 을 사이트 뿌리로 삼기 때문에 이 파일을 쓰지 않는다.
+  깃허브 페이지는 저장소 뿌리를 그대로 내주므로 앱이 /app/ 아래에 놓인다.
+  그때 주소 끝에 app 을 붙여야 하는 것을 모르고 빈 화면을 보는 일이 없도록
+  여기서 바로 넘겨준다. 넷리파이가 멈췄을 때 쓰는 갓길이다.
+-->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>교육활동</title>
+  <meta http-equiv="refresh" content="0; url=./app/">
+  <link rel="canonical" href="./app/">
+  <style>
+    body { font-family: system-ui, -apple-system, "맑은 고딕", sans-serif;
+           display: grid; place-items: center; min-height: 100vh; margin: 0;
+           background: #f5f7fa; color: #1a1f27; }
+    @media (prefers-color-scheme: dark) { body { background: #12161c; color: #e6eaf0; } }
+    a { color: #2f6fed; }
+  </style>
+</head>
+<body>
+  <p>교육활동 앱으로 넘어갑니다. 안 넘어가면 <a href="./app/">여기를 누르세요</a>.</p>
+  <script>location.replace('./app/');</script>
+</body>
+</html>
