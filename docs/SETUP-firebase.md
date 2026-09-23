@@ -190,7 +190,11 @@ service cloud.firestore {
     match /schools/{school}/audit/{id} {
       allow read: if ok(school);
       allow create: if ok(school);
-      allow update, delete: if false;
+      // 고쳐 쓰는 것은 누구도 못 한다. 이력이 이력 구실을 하려면 그래야 한다.
+      allow update: if false;
+      // 다만 관리자는 지울 수 있다. 앱이 반 년 지난 것을 알아서 치운다.
+      // 안 치우면 해마다 몇 천 건씩 늘어 새 컴퓨터가 그것을 다 받아오게 된다.
+      allow delete: if isAdmin(school);
     }
   }
 }

@@ -4,7 +4,7 @@ import { loadConfig } from './config.js';
 import { effectiveLinks } from './links.js';
 import {
   initStore, on, loadSavedUser, currentUser, setUser, isAdmin, backendKind,
-  signIn, signOut, needsSignIn, isApproved,
+  signIn, signOut, needsSignIn, isApproved, pruneAudit,
 } from './store.js';
 import { today, fmtK, weekStart, addDays, monthStart, monthEnd } from './model.js';
 import { renderDaily, renderWeekly, renderMonthly } from './views/schedule.js';
@@ -98,6 +98,16 @@ async function boot() {
   // 학교 전체가 함께 쓰는 방식에서는 이름·역할이 구글 로그인과 명단에서 오므로 묻지 않는다.
   if (!isWidget && backendKind() !== 'firestore' && !currentUser().name) setTimeout(askName, 300);
   registerSW();
+
+  // 오래된 변경 이력은 관리자가 들어올 때 조용히 치운다. 하루에 한 번만 돈다.
+  // 자료가 다 들어온 뒤에 세어야 하므로 조금 늦춘다. 위젯 창에서는 하지 않는다.
+  if (!isWidget) {
+    setTimeout(() => {
+      pruneAudit()
+        .then((n) => { if (n) console.info(`[이력] 오래된 ${n}건을 치웠습니다.`); })
+        .catch(() => {});
+    }, 8000);
+  }
 }
 
 function readHash() {

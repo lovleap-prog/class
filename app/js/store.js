@@ -128,6 +128,41 @@ export async function audit(action, target, before, after) {
   emit('audit');
 }
 
+// ── 오래된 이력 치우기 ─────────────────────────────────
+// 이력은 21곳에서 쌓이는데 쓰이는 곳은 [승인함]의 최근 40건뿐이다. 두면 해마다
+// 몇 천 건씩 늘고, 선생님이 새 컴퓨터에서 처음 열 때 그것을 다 받아오게 된다.
+// 그래서 관리자가 앱을 열 때 조용히 치운다. 하루에 한 번만 본다.
+const KEEP_DAYS = 180;   // 반 년. 오기재를 따질 일은 그 안에 끝난다.
+const KEEP_MIN = 200;    // 아무리 오래됐어도 이만큼은 남긴다. 이력이 텅 비면 곤란하다.
+const PRUNE_KEY = 'sam.auditPrunedAt';
+
+/**
+ * 오래된 변경 이력을 지운다. 관리자만, 하루에 한 번만.
+ * 실패해도 조용히 넘어간다. 이력 정리가 앱을 막을 이유는 없다.
+ * @returns {Promise<number>} 지운 건수
+ */
+export async function pruneAudit() {
+  if (!isAdmin()) return 0;
+  const today = new Date().toISOString().slice(0, 10);
+  try { if (localStorage.getItem(PRUNE_KEY) === today) return 0; } catch { /* 무시 */ }
+
+  const rows = list('audit').slice()
+    .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  const cut = new Date(Date.now() - KEEP_DAYS * 86400000).toISOString();
+  // 최근 것부터 KEEP_MIN 개는 건너뛰고, 그 뒤에서 낡은 것만 고른다.
+  const old = rows.slice(KEEP_MIN).filter((r) => String(r.at || '') < cut);
+
+  try { localStorage.setItem(PRUNE_KEY, today); } catch { /* 무시 */ }
+  if (!old.length) return 0;
+
+  let n = 0;
+  for (const r of old) {
+    try { await backend.remove('audit', r.id); n += 1; } catch { break; }
+  }
+  if (n) emit('audit');
+  return n;
+}
+
 function slim(o) {
   if (!o) return null;
   const { history, ...rest } = o;
