@@ -22,27 +22,39 @@ export async function createFirestoreBackend(cfg) {
 
   const cache = Object.fromEntries(COLLECTIONS.map((c) => [c, []]));
   let firstLoad;
-  let stopChecks = null;   // 개인 체크 구독 해제 함수
+  let stopMineList = [];   // 본인 것만 보는 컬렉션의 구독 해제 함수들
   let stopMe = null;       // 내 명단 문서 구독 해제 함수
   let stopShared = [];     // 공용 자료 구독 해제 함수들
   let watching = false;    // 공용 자료를 지금 보고 있는가
 
-  // 개인 체크는 남이 읽을 수 없어야 하므로 컬렉션 전체가 아니라 '내 문서 하나'만 구독한다.
-  // (파이어스토어는 권한 없는 문서가 섞일 수 있는 질의를 통째로 거부하기 때문에,
-  //  읽기 규칙을 본인으로 좁히려면 구독도 문서 단위여야 한다)
-  function watchMyChecks(uid) {
-    if (stopChecks) { stopChecks(); stopChecks = null; }
-    cache.checks = [];
-    emit('checks');
+  /**
+   * 본인 것만 보는 컬렉션. 문서 번호가 그 사람의 uid 다.
+   *
+   * 파이어스토어는 **권한 없는 문서가 섞일 수 있는 질의를 통째로 거부한다.**
+   * 그래서 읽기 규칙을 본인으로 좁힌 컬렉션은 구독도 문서 단위여야 한다.
+   * 여기 빠뜨리면 '공용 자료' 로 묶여 컬렉션째 구독되고, 규칙에 걸려
+   * Missing or insufficient permissions 만 찍히며 그 기능이 통째로 죽는다.
+   * (개인 메모가 실제로 그랬다)
+   */
+  const MINE_ONLY = ['checks', 'memos'];
+
+  /** 내 문서 하나만 구독한다. 로그아웃하면 uid 를 비워 부른다. */
+  function watchMine(uid) {
+    for (const stop of stopMineList) stop();
+    stopMineList = [];
+    for (const c of MINE_ONLY) { cache[c] = []; emit(c); }
     if (!uid) return;
-    stopChecks = dbMod.onSnapshot(
-      dbMod.doc(db, 'schools', schoolId, 'checks', uid),
-      (snap) => {
-        cache.checks = snap.exists() ? [{ id: snap.id, ...snap.data() }] : [];
-        emit('checks');
-      },
-      (err) => console.error('[firestore] checks', err),
-    );
+    for (const c of MINE_ONLY) {
+      const stop = dbMod.onSnapshot(
+        dbMod.doc(db, 'schools', schoolId, c, uid),
+        (snap) => {
+          cache[c] = snap.exists() ? [{ id: snap.id, ...snap.data() }] : [];
+          emit(c);
+        },
+        (err) => console.error('[firestore]', c, err),
+      );
+      stopMineList.push(stop);
+    }
   }
 
   async function signIn() {
@@ -102,12 +114,12 @@ export async function createFirestoreBackend(cfg) {
   authMod.onAuthStateChanged(auth, async (u) => {
     if (u) {
       await resolveMember(u);
-      watchMyChecks(u.uid);
+      watchMine(u.uid);
     } else {
       if (stopMe) { stopMe(); stopMe = null; }
       stopSharedWatch();
       setUser({ uid: '', role: 'teacher', name: '', dept: '', email: '', approved: false, canNotice: false });
-      watchMyChecks(null);
+      watchMine(null);
       emit('auth');
     }
   });
@@ -119,7 +131,7 @@ export async function createFirestoreBackend(cfg) {
   function startShared() {
     if (watching) return;
     watching = true;
-    const shared = COLLECTIONS.filter((c) => c !== 'checks');
+    const shared = COLLECTIONS.filter((c) => !MINE_ONLY.includes(c));
     for (const c of shared) {
       const stop = dbMod.onSnapshot(base(c), (snap) => {
         cache[c] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -134,7 +146,7 @@ export async function createFirestoreBackend(cfg) {
     watching = false;
     for (const stop of stopShared) stop();
     stopShared = [];
-    for (const c of COLLECTIONS) if (c !== 'checks') cache[c] = [];
+    for (const c of COLLECTIONS) if (!MINE_ONLY.includes(c)) cache[c] = [];
     for (const c of COLLECTIONS) emit(c);
   }
 

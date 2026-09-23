@@ -382,11 +382,21 @@ function leftoverBox(ctx) {
   const cols = Object.keys(left);
   if (!cols.length) return null;
 
-  // 이미 공용에 들어가 있는 것은 뺀다(같은 문서 번호면 이미 올린 것).
+  // 이미 공용에 들어가 있는 것은 뺀다.
+  //
+  // 문서 번호만 견주면 모자란다. 같은 한글 파일을 이 컴퓨터에도 올리고 공용에도
+  // 올렸으면 번호가 새로 매겨져 '다른 자료' 로 보이고, 올리는 순간 학사일정이
+  // 두 배가 된다. 그래서 **속을 견준다.**
+  // 번호와 시각 도장은 내용이 아니다. 같은 자료를 두 번 넣으면 이것들만 달라진다.
+  const sig = (d) => {
+    const { id, createdAt, updatedAt, ...rest } = d;
+    return JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
+  };
   const todo = {};
   for (const c of cols) {
-    const have = new Set(list(c).map((d) => d.id));
-    const rows = left[c].filter((d) => d.id && !have.has(d.id));
+    const haveIds = new Set(list(c).map((d) => d.id));
+    const haveSigs = new Set(list(c).map(sig));
+    const rows = left[c].filter((d) => d.id && !haveIds.has(d.id) && !haveSigs.has(sig(d)));
     if (rows.length) todo[c] = rows;
   }
   const names = Object.keys(todo);
@@ -418,8 +428,26 @@ function leftoverBox(ctx) {
             e.currentTarget.disabled = false;
           }
         },
-      }, `${total}건 모두 올리기`)),
+      }, `${total}건 모두 올리기`),
+      h('button', {
+        class: 'btn',
+        title: '올리지 않고, 이 컴퓨터에 남은 것만 지웁니다',
+        onClick: async (e) => {
+          if (!(await confirmDialog(
+            '올리지 않고 이 컴퓨터에 남은 것만 지웁니다. 학교 공용 자료는 그대로입니다.\n'
+            + '이미 공용에 같은 내용이 들어 있을 때 쓰세요.',
+            { danger: true, okText: '이 컴퓨터 것만 지우기' }))) return;
+          e.currentTarget.disabled = true;
+          try {
+            for (const k of Object.keys(localStorage)) {
+              if (k.startsWith('sam.col.')) localStorage.removeItem(k);
+            }
+          } catch (err) { console.warn(err); }
+          toast('이 컴퓨터에 남아 있던 것을 지웠습니다.', 'ok');
+          location.reload();
+        },
+      }, '올리지 않고 지우기')),
     h('p', { class: 'muted small' },
-      '문서 번호를 그대로 쓰므로 두 번 눌러도 자료가 늘어나지 않습니다. ',
-      '올리고 나면 이 상자는 사라집니다.')));
+      '속이 같은 것은 이미 걸러 냈습니다. 그래도 학교 공용에 이미 들어 있는 자료라면 ',
+      h('b', {}, '[올리지 않고 지우기]'), ' 를 쓰세요. 공용 자료는 건드리지 않습니다.')));
 }
