@@ -1,0 +1,38 @@
+# 깃허브 페이지로 내보내기
+#
+# app/ 폴더만 올린다. 저장소 뿌리를 통째로 내주면 주소가 .../app/ 이 되는데,
+# 그러면 선생님들 주소창에 쓸데없는 꼬리가 붙는다. 여기서 app/ 만 떼어 올리면
+# 저장소 주소가 곧 앱 주소가 된다.
+#
+# 공개 저장소는 액션도 페이지도 한도가 없다. 밀어 넣으면 1~2분 뒤 올라간다.
+name: 깃허브 페이지 배포
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # 손으로도 돌릴 수 있게
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 연달아 밀어 넣으면 마지막 것만 올린다. 앞의 것을 기다릴 이유가 없다.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app          # 앱은 이 폴더에만 있다
+      - id: deploy
+        uses: actions/deploy-pages@v4
