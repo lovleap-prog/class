@@ -1181,3 +1181,11 @@ body.widget .widget-body { padding-bottom: 16px; }
 }
 .base-day > strong { color: var(--muted); }
 .base-day > span { word-break: keep-all; }
+
+/* ── 앱 판 확인 ─────────────────────────────────────────── */
+.ver-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 7px 10px; border-radius: 8px; background: var(--panel-2);
+  border: 1px solid var(--line); margin-bottom: 4px; font-size: 13px;
+}
+.ver-row code, .ver-row > :last-child { font-weight: 700; font-variant-numeric: tabular-nums; }

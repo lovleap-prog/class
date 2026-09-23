@@ -390,6 +390,13 @@ function registerSW() {
       });
       // 다른 탭에서 갱신됐을 수도 있으니 한 번 확인한다.
       reg.update().catch(() => {});
+
+      // 앱으로 설치해 하루 종일 켜 두면 새로 여는 일이 없어 갱신을 놓친다.
+      // 창을 다시 볼 때와 한 시간마다 한 번씩 서버에 물어본다.
+      const look = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) look(); });
+      window.addEventListener('focus', look);
+      setInterval(look, 60 * 60 * 1000);
     })
     .catch((e) => console.warn('SW 등록 실패', e));
 }

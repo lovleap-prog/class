@@ -1,6 +1,6 @@
 // 설정 탭 — 사용자, 학교 정보, 저장 방식, 백업/복원, 설치 안내
 import { h, toast, confirmDialog, download, clear } from '../lib/dom.js';
-import { loadConfig, saveConfig, resetConfig } from '../config.js';
+import { loadConfig, saveConfig, resetConfig, APP_VERSION } from '../config.js';
 import {
   currentUser, setUser, exportAll, importAll, backendKind, list, isAdmin, signOut,
 } from '../store.js';
@@ -139,6 +139,8 @@ export function renderSettings(ctx) {
       h('p', { class: 'muted small' }, '저장 위치를 바꾸면 새로 고침해야 적용됩니다. 설정 방법은 docs/SETUP-firebase.md 를 보세요.'))),
 
     // 로컬로 먼저 써 보다 넘어온 경우, 그때 넣은 자료가 따라오지 않았을 수 있다.
+    versionBox(),
+
     leftoverBox(ctx),
 
     // 명단은 관리자에게만. 교사 화면에 남의 계정을 늘어놓을 이유가 없다.
@@ -302,6 +304,78 @@ const labelOf = (c) => ({
  * 넣은 학사일정·시정표·시간표가 따라오지 않는다. 학사일정이 빠지면 추석 같은
  * 음력 공휴일이 안 잡히는 식으로 조용히 티가 난다. 그래서 찾아서 알려준다.
  */
+/**
+ * 앱 판 확인 — '내 화면만 안 바뀐다' 를 눈으로 잡는 자리.
+ *
+ * 고쳐 올려도 학교 컴퓨터가 옛 파일을 붙들고 있는 일이 있다. 그때 무엇이
+ * 낡았는지(서버가 옛것인지, 이 컴퓨터가 옛것인지) 가릴 방법이 없으면
+ * 서로 짐작만 하게 된다. 그래서 둘을 나란히 적고, 밀어내는 단추를 둔다.
+ */
+function versionBox() {
+  const mine = h('code', {}, APP_VERSION);
+  const serverOut = h('span', { class: 'muted' }, '아직 확인하지 않았습니다');
+  const verdict = h('p', { class: 'muted small' }, '');
+
+  // 서버에 올라간 sw.js 를 캐시를 건너뛰고 직접 읽어 판을 본다.
+  // 앱 파일이 아니라 서버가 낡은 것인지 여기서 갈린다.
+  const check = async (btn) => {
+    btn.disabled = true;
+    serverOut.textContent = '확인하는 중\u2026';
+    verdict.textContent = '';
+    try {
+      const res = await fetch(`./sw.js?t=${Date.now()}`, { cache: 'no-store' });
+      const text = await res.text();
+      const m = text.match(/VERSION\s*=\s*'([^']+)'/);
+      const server = m ? m[1] : '?';
+      serverOut.textContent = server;
+      serverOut.className = '';
+      if (server === APP_VERSION) {
+        verdict.textContent = '이 컴퓨터가 서버와 같은 판입니다. 최신입니다.';
+      } else {
+        verdict.innerHTML = '';
+        verdict.append('서버에는 ', h('b', {}, server), ' 가 올라와 있는데 이 컴퓨터는 ',
+          h('b', {}, APP_VERSION), ' 입니다. 아래 [새 판 받기] 를 누르세요.');
+      }
+    } catch (e) {
+      serverOut.textContent = '확인 실패';
+      verdict.textContent = '인터넷 연결을 확인해 주세요.';
+    }
+    btn.disabled = false;
+  };
+
+  // 캐시와 서비스워커를 통째로 버리고 다시 받는다. 자료는 건드리지 않는다.
+  const force = async (btn) => {
+    if (!(await confirmDialog(
+      '이 컴퓨터에 받아둔 앱 파일을 모두 버리고 새로 받습니다. 입력하신 자료는 그대로 있습니다.',
+      { okText: '새로 받기' }))) return;
+    btn.disabled = true;
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (e) { console.warn(e); }
+    location.reload();
+  };
+
+  return box('앱 판 확인', h('div', {},
+    h('p', { class: 'note' },
+      '고쳐 올린 것이 화면에 안 보일 때 여기서 확인합니다. ',
+      '두 판이 같으면 최신이고, 서버 쪽이 높으면 이 컴퓨터가 낡은 것입니다.'),
+    h('div', { class: 'ver-row' },
+      h('span', {}, '이 컴퓨터가 쓰는 판'), mine),
+    h('div', { class: 'ver-row' },
+      h('span', {}, '서버에 올라온 판'), serverOut),
+    verdict,
+    h('div', { class: 'row gap' },
+      h('button', { class: 'btn', onClick: (e) => check(e.currentTarget) }, '서버 판 확인'),
+      h('button', { class: 'btn btn-danger', onClick: (e) => force(e.currentTarget) }, '새 판 받기'))));
+}
+
 function leftoverBox(ctx) {
   if (backendKind() !== 'firestore' || !isAdmin()) return null;
   const left = localLeftovers();
